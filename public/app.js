@@ -74,6 +74,7 @@
     const data = await r.json();
     state.boards = data.boards;
     state.tallies = data.tallies || {};
+    if (data.refreshAt) state.refreshAt = data.refreshAt;
     snapshotNow();
     render();
   }

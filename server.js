@@ -116,17 +116,20 @@ const BOARDS = [
   }
 ];
 
+const REFRESH_MS = 5 * 60 * 1000;
+
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {} }));
+  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {} }));
 }
 
 function loadVotes() {
   ensureDataDir();
   try {
-    return JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8'));
+    return { tallies: {}, users: {}, oddsOverrides: {}, ...data };
   } catch {
-    return { tallies: {}, users: {} };
+    return { tallies: {}, users: {}, oddsOverrides: {} };
   }
 }
 
@@ -154,8 +157,83 @@ function broadcast(event, data) {
 
 function keyFor(boardId, player) { return `${boardId}:${player}`; }
 
+function americanToImplied(odds) {
+  const n = parseInt(String(odds).replace(/[^-\d]/g, ''), 10);
+  if (!n) return 0;
+  if (n > 0) return 100 / (n + 100);
+  return Math.abs(n) / (Math.abs(n) + 100);
+}
+
+function impliedToAmerican(p) {
+  const clamped = Math.min(0.92, Math.max(0.01, p));
+  let raw;
+  if (clamped >= 0.5) {
+    raw = -Math.round(clamped / (1 - clamped) * 100);
+  } else {
+    raw = Math.round((1 - clamped) / clamped * 100);
+  }
+  // snap to 5
+  const snapped = Math.round(Math.abs(raw) / 5) * 5;
+  const min = 105;
+  const final = Math.max(min, snapped);
+  return (raw < 0 ? '-' : '+') + final;
+}
+
+function liveBoards() {
+  // Apply oddsOverrides on top of base BOARDS, re-sort each board, retag FAV/LOCK.
+  return BOARDS.map(board => {
+    const lines = board.lines.map(l => {
+      const k = keyFor(board.id, l.player);
+      const odds = voteState.oddsOverrides[k] || l.odds;
+      return { player: l.player, odds };
+    });
+    lines.sort((a, b) => americanToImplied(b.odds) - americanToImplied(a.odds));
+    lines.forEach((l, i) => {
+      if (i === 0) l.tag = l.odds.startsWith('-') ? 'LOCK' : 'FAV';
+    });
+    return { ...board, lines };
+  });
+}
+
 function publicState() {
-  return { boards: BOARDS, tallies: voteState.tallies };
+  return { boards: liveBoards(), tallies: voteState.tallies, refreshAt: nextBoundary() };
+}
+
+function nextBoundary() {
+  return Math.ceil((Date.now() + 1) / REFRESH_MS) * REFRESH_MS;
+}
+
+function resetWindow() {
+  // 1. Bake votes into new odds (probability shifts by ~1.5% per net vote, capped).
+  const newOverrides = { ...voteState.oddsOverrides };
+  const live = liveBoards();
+  for (const board of live) {
+    for (const line of board.lines) {
+      const key = keyFor(board.id, line.player);
+      const t = voteState.tallies[key] || { up: 0, down: 0 };
+      const net = (t.up || 0) - (t.down || 0);
+      if (net === 0) continue;
+      const p = americanToImplied(line.odds);
+      const newP = Math.min(0.85, Math.max(0.02, p + net * 0.015));
+      newOverrides[key] = impliedToAmerican(newP);
+    }
+  }
+  voteState.oddsOverrides = newOverrides;
+  voteState.tallies = {};
+  voteState.users = {};
+  persistVotes();
+  broadcast('snapshot', publicState());
+}
+
+function scheduleResets() {
+  const fireAt = nextBoundary();
+  const delay = Math.max(0, fireAt - Date.now());
+  setTimeout(() => {
+    try { resetWindow(); } catch (e) { console.error('reset failed', e); }
+    setInterval(() => {
+      try { resetWindow(); } catch (e) { console.error('reset failed', e); }
+    }, REFRESH_MS);
+  }, delay);
 }
 
 function readBody(req) {
@@ -266,4 +344,5 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Rift Open Sportsbook running on port ${PORT}`);
+  scheduleResets();
 });
