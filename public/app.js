@@ -4,6 +4,7 @@
   const state = {
     boards: [],
     tallies: {},
+    snapshotTallies: {},
     userId: null,
     picks: {},
     parlay: [],
@@ -11,6 +12,10 @@
     refreshAt: Date.now() + REFRESH_MS,
     firstLoad: true
   };
+
+  function snapshotNow() {
+    state.snapshotTallies = JSON.parse(JSON.stringify(state.tallies || {}));
+  }
 
   function $(sel, root = document) { return root.querySelector(sel); }
   function ce(tag, props = {}, ...kids) {
@@ -63,6 +68,7 @@
     const data = await r.json();
     state.boards = data.boards;
     state.tallies = data.tallies || {};
+    snapshotNow();
     render();
   }
 
@@ -76,6 +82,7 @@
         const data = JSON.parse(e.data);
         state.boards = data.boards;
         state.tallies = data.tallies || {};
+        if (!Object.keys(state.snapshotTallies).length) snapshotNow();
         render();
       } catch {}
     });
@@ -126,7 +133,7 @@
     for (const board of state.boards) {
       for (const line of board.lines) {
         const key = `${board.id}:${line.player}`;
-        const t = state.tallies[key] || { up: 0, down: 0 };
+        const t = state.snapshotTallies[key] || { up: 0, down: 0 };
         const net = t.up - t.down;
         if (!topSteal || net > topSteal.net) topSteal = { board, line, net, t };
         if (!topFade || (t.down - t.up) > topFade.net) topFade = { board, line, net: t.down - t.up, t };
@@ -159,11 +166,11 @@
     ));
     el.appendChild(ce('div', { class: 'board-rule' }));
 
-    // find crowd favorite (highest net votes in this board)
+    // find crowd favorite (highest net votes in this board, frozen at last refresh)
     let crowdFav = null;
     for (const line of board.lines) {
       const key = `${board.id}:${line.player}`;
-      const t = state.tallies[key] || { up: 0, down: 0 };
+      const t = state.snapshotTallies[key] || { up: 0, down: 0 };
       const net = t.up - t.down;
       if (net > 0 && (!crowdFav || net > crowdFav.net)) crowdFav = { player: line.player, net };
     }
@@ -177,6 +184,7 @@
   function renderLine(board, line, rank, isCrowdFav) {
     const key = `${board.id}:${line.player}`;
     const tally = state.tallies[key] || { up: 0, down: 0 };
+    const snap = state.snapshotTallies[key] || { up: 0, down: 0 };
     const myVote = (state.picks && state.picks[key]) || null;
     const selected = state.parlay.some(p => p.key === key);
 
@@ -190,7 +198,7 @@
     if (line.tag) nameEl.appendChild(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
     row.appendChild(nameEl);
 
-    const move = moveIndicator(tally);
+    const move = moveIndicator(snap);
     const oddsEl = ce('div', { class: 'line-odds' }, line.odds, move);
     row.appendChild(oddsEl);
 
@@ -234,15 +242,8 @@
     if (downBtn) downBtn.querySelector('.vote-count').textContent = String(tally.down || 0);
     row.classList.add('flash');
     setTimeout(() => row.classList.remove('flash'), 600);
-    // refresh move indicator
-    const oddsEl = row.querySelector('.line-odds');
-    const existing = oddsEl.querySelector('.line-move');
-    if (existing) existing.remove();
-    const newMove = moveIndicator(tally);
-    if (newMove.nodeType === 1) oddsEl.appendChild(newMove);
-    // refresh headline
-    document.querySelector('.headline')?.remove();
-    $('#boards').parentNode.insertBefore(buildHeadline(), $('#boards'));
+    // Derived odds signals (movement arrows, crowd favorite, headline) are
+    // intentionally not recomputed here — they are frozen until the next refresh.
   }
 
   async function castVote(boardId, player, vote) {
