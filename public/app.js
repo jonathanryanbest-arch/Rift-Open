@@ -399,19 +399,17 @@
   function startCountdown() {
     const timeEl = $('#countdown-time');
     const barEl = $('#countdown-bar');
-    let refreshing = false;
+    let reloading = false;
     function tick() {
       const remain = Math.max(0, state.refreshAt - Date.now());
       const mins = Math.floor(remain / 60000);
       const secs = Math.floor((remain % 60000) / 1000);
       timeEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
       barEl.style.width = `${(remain / REFRESH_MS) * 100}%`;
-      if (remain <= 0 && !refreshing) {
-        refreshing = true;
-        state.refreshAt = nextRefreshAt();
-        loadState()
-          .then(() => toast('Odds refreshed'))
-          .finally(() => { refreshing = false; });
+      if (remain <= 0 && !reloading) {
+        reloading = true;
+        timeEl.textContent = '0:00';
+        location.reload();
       }
     }
     tick();
