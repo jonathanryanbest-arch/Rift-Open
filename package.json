@@ -1,0 +1,13 @@
+{
+  "name": "rift-open-sportsbook",
+  "version": "1.0.0",
+  "description": "The official Rift Open Sportsbook",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

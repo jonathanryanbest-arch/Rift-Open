@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>The Rift Open — Sportsbook</title>
+<meta name="description" content="The official Rift Open Sportsbook. Year 5. One beer = one stroke off." />
+<meta name="theme-color" content="#0b0b0b" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,500&display=swap">
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">R<span>O</span></div>
+      <div class="brand-text">
+        <div class="brand-title">THE RIFT OPEN</div>
+        <div class="brand-sub">Sportsbook · Year V · 1 beer = -1 stroke</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="countdown" id="countdown" title="Odds refresh every 5 minutes">
+        <div class="countdown-label">NEXT REFRESH</div>
+        <div class="countdown-time" id="countdown-time">5:00</div>
+        <div class="countdown-bar"><div class="countdown-bar-fill" id="countdown-bar"></div></div>
+      </div>
+      <div class="status" id="status"><span class="dot"></span><span id="status-text">LIVE</span></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="intro">
+      <h1>Bet the Board. Fade Your Friends.</h1>
+      <p>👍 if the line's a steal. 👎 if it's garbage. The crowd moves the board in real time. Build a parlay below to flex on the group chat.</p>
+    </section>
+
+    <section class="boards" id="boards"></section>
+
+    <section class="parlay-section">
+      <div class="parlay-card" id="parlay-card">
+        <div class="parlay-head">
+          <div>
+            <div class="parlay-kicker">BET SLIP</div>
+            <div class="parlay-title">Your Parlay</div>
+          </div>
+          <button class="parlay-clear" id="parlay-clear" type="button">Clear</button>
+        </div>
+        <div class="parlay-legs" id="parlay-legs">
+          <div class="parlay-empty">Tap a line above to add it to your parlay.</div>
+        </div>
+        <div class="parlay-foot">
+          <div class="parlay-stats">
+            <div class="stat"><div class="stat-label">LEGS</div><div class="stat-value" id="parlay-count">0</div></div>
+            <div class="stat"><div class="stat-label">$100 PAYS</div><div class="stat-value" id="parlay-payout">—</div></div>
+            <div class="stat"><div class="stat-label">AMERICAN</div><div class="stat-value" id="parlay-american">—</div></div>
+          </div>
+          <button class="parlay-share" id="parlay-share" type="button">📋 Copy Share Link</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div>The Rift Open · Year V · For entertainment purposes only (mostly)</div>
+      <div class="footer-sub">Your votes are anonymous. Odds refresh every 5 minutes.</div>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
