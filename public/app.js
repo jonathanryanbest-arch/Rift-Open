@@ -1,6 +1,12 @@
 (() => {
   const REFRESH_MS = 5 * 60 * 1000;
 
+  function nextRefreshAt() {
+    // Align to fixed 5-minute wall-clock boundaries so every viewer sees the
+    // same countdown and refreshing the page doesn't reset it.
+    return Math.ceil((Date.now() + 1) / REFRESH_MS) * REFRESH_MS;
+  }
+
   const state = {
     boards: [],
     tallies: {},
@@ -9,7 +15,7 @@
     picks: {},
     parlay: [],
     es: null,
-    refreshAt: Date.now() + REFRESH_MS,
+    refreshAt: nextRefreshAt(),
     firstLoad: true
   };
 
@@ -393,15 +399,19 @@
   function startCountdown() {
     const timeEl = $('#countdown-time');
     const barEl = $('#countdown-bar');
+    let refreshing = false;
     function tick() {
       const remain = Math.max(0, state.refreshAt - Date.now());
       const mins = Math.floor(remain / 60000);
       const secs = Math.floor((remain % 60000) / 1000);
       timeEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
       barEl.style.width = `${(remain / REFRESH_MS) * 100}%`;
-      if (remain <= 0) {
-        state.refreshAt = Date.now() + REFRESH_MS;
-        loadState().then(() => toast('Odds refreshed'));
+      if (remain <= 0 && !refreshing) {
+        refreshing = true;
+        state.refreshAt = nextRefreshAt();
+        loadState()
+          .then(() => toast('Odds refreshed'))
+          .finally(() => { refreshing = false; });
       }
     }
     tick();
@@ -438,7 +448,6 @@
     bumpStreak();
     $('#parlay-clear').addEventListener('click', () => { state.parlay = []; persistParlay(); render(); });
     $('#parlay-share').addEventListener('click', shareParlay);
-    setInterval(loadState, REFRESH_MS);
   }
 
   init().catch(e => {
