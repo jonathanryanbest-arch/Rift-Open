@@ -70,8 +70,35 @@
     state.picks = data.picks || {};
   }
 
+  const STATE_CACHE_KEY = 'rift_state_cache_v1';
+
+  function saveStateCache(data) {
+    try {
+      localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({ t: Date.now(), data }));
+    } catch {}
+  }
+  function loadStateCache() {
+    try {
+      const raw = localStorage.getItem(STATE_CACHE_KEY);
+      if (!raw) return null;
+      const { t, data } = JSON.parse(raw);
+      if (!data || !Array.isArray(data.boards)) return null;
+      return { t, data };
+    } catch { return null; }
+  }
+
+  async function fetchWithTimeout(url, opts = {}, timeoutMs = 12000) {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...opts, signal: ctrl.signal });
+    } finally {
+      clearTimeout(id);
+    }
+  }
+
   async function loadState() {
-    const r = await fetch('/api/state', { cache: 'no-store' });
+    const r = await fetchWithTimeout('/api/state', { cache: 'no-store' }, 12000);
     if (!r.ok) throw new Error('state http ' + r.status);
     const data = await r.json();
     if (!Array.isArray(data.boards)) throw new Error('state missing boards');
@@ -79,15 +106,20 @@
     state.tallies = data.tallies || {};
     state.oddsHistory = data.oddsHistory || {};
     if (data.refreshAt) state.refreshAt = data.refreshAt;
+    saveStateCache(data);
     snapshotNow();
     render();
   }
 
-  async function loadStateWithRetry(max = 3) {
+  async function loadStateWithRetry(max = 5) {
     let lastErr;
     for (let i = 0; i < max; i++) {
       try { await loadState(); return; }
-      catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
+      catch (e) {
+        lastErr = e;
+        const wait = Math.min(8000, 800 * Math.pow(1.6, i));
+        await new Promise(r => setTimeout(r, wait));
+      }
     }
     throw lastErr;
   }
@@ -588,14 +620,55 @@
     } catch {}
   }
 
+  function renderLoadingPlaceholder(msg, withRetry) {
+    const container = $('#boards');
+    if (!container) return;
+    container.innerHTML = '';
+    const card = ce('div', { class: 'boards-placeholder' },
+      ce('div', { class: 'boards-placeholder-title' }, msg || 'Loading odds\u2026'),
+      ce('div', { class: 'boards-placeholder-sub' }, 'Railway sometimes cold-starts. Give it a few seconds.')
+    );
+    if (withRetry) {
+      card.appendChild(ce('button', {
+        class: 'boards-placeholder-retry', type: 'button',
+        onclick: () => { renderLoadingPlaceholder('Retrying\u2026', false); bootData(); }
+      }, 'Tap to retry'));
+    }
+    container.appendChild(card);
+  }
+
+  async function bootData() {
+    try {
+      await loadStateWithRetry();
+      connectStream();
+    } catch (e) {
+      console.error('boot failed', e);
+      if (!state.boards.length) renderLoadingPlaceholder('Couldn\u2019t reach the server', true);
+      else toast('Reconnecting\u2026');
+    }
+  }
+
   async function init() {
     state.userId = getOrCreateUserId();
     loadParlay();
-    try { await loadMe(); } catch (e) { console.warn('loadMe failed, continuing', e); }
-    await loadStateWithRetry();
-    hydrateFromHash();
-    render();
-    connectStream();
+
+    // Stale-while-revalidate: render cached state immediately if we have one.
+    const cached = loadStateCache();
+    if (cached && cached.data) {
+      state.boards = cached.data.boards;
+      state.tallies = cached.data.tallies || {};
+      state.oddsHistory = cached.data.oddsHistory || {};
+      if (cached.data.refreshAt) state.refreshAt = cached.data.refreshAt;
+      snapshotNow();
+      hydrateFromHash();
+      render();
+    } else {
+      renderLoadingPlaceholder('Loading odds\u2026', false);
+    }
+
+    loadMe().catch(e => console.warn('loadMe failed, continuing', e));
+    bootData();
+
     startCountdown();
     bumpStreak();
     $('#parlay-clear').addEventListener('click', () => { state.parlay = []; persistParlay(); render(); });
@@ -608,11 +681,13 @@
     $('#player-modal-close')?.addEventListener('click', closePlayer);
     $('#player-modal-backdrop')?.addEventListener('click', closePlayer);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePlayer(); });
+
+    // When the tab becomes visible again after being backgrounded on mobile,
+    // SSE may be dead. Refresh state and reconnect.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') bootData();
+    });
   }
 
-  init().catch(e => {
-    console.error('init failed', e);
-    toast('Couldn\u2019t load odds — retrying\u2026');
-    setTimeout(() => location.reload(), 2500);
-  });
+  init();
 })();

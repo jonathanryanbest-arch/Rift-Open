@@ -389,6 +389,34 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   100% { background: transparent; }
 }
 
+.boards-placeholder {
+  grid-column: 1 / -1;
+  padding: 40px 24px; border-radius: var(--radius);
+  border: 1px dashed var(--line);
+  background: rgba(255,255,255,0.02);
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.boards-placeholder-title {
+  font-family: 'Bebas Neue', sans-serif; font-size: 22px; letter-spacing: 2px; color: var(--text);
+}
+.boards-placeholder-title::before {
+  content: ""; display: inline-block; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--accent); margin-right: 10px;
+  vertical-align: middle; animation: loading-pulse 1.2s ease-in-out infinite;
+}
+.boards-placeholder-sub { color: var(--muted); font-size: 13px; max-width: 320px; }
+.boards-placeholder-retry {
+  margin-top: 8px;
+  background: linear-gradient(180deg, var(--accent) 0%, #b8893f 100%);
+  color: #1a130a; border: 0; border-radius: 10px; padding: 10px 16px;
+  font-weight: 700; font-size: 13px; letter-spacing: 1px; cursor: pointer;
+}
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
 .line-name {
   background: transparent; border: 0; padding: 0; margin: 0;
   color: inherit; font: inherit; text-align: left;
