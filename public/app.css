@@ -188,7 +188,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   font-size: 9px; letter-spacing: 1.5px; font-weight: 800;
   padding: 3px 7px; border-radius: 4px;
 }
-.line-tag.FAV { background: currentColor; color: var(--bg); }
+.line-tag.FAV { background: rgba(0,0,0,0.78); color: #fff; }
 .line-tag.LOCK { background: #5a1018; color: #ffd9d9; }
 .board[data-theme="red"] .line-tag.FAV { background: #ff7b7b; color: #2a0506; }
 .board[data-theme="blue"] .line-tag.FAV { background: #8cc2ff; color: #061429; }
