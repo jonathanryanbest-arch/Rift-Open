@@ -215,7 +215,11 @@
     });
     row.appendChild(ce('div', { class: 'line-rank' }, String(rank)));
 
-    const nameEl = ce('div', { class: 'line-name' }, line.player);
+    const nameEl = ce('button', {
+      class: 'line-name', type: 'button',
+      'aria-label': `View ${line.player}'s full profile`,
+      onclick: (e) => { e.stopPropagation(); openPlayer(line.player); }
+    }, line.player);
     if (line.tag) nameEl.appendChild(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
     row.appendChild(nameEl);
 
@@ -327,12 +331,11 @@
 
   async function castVote(boardId, player, vote) {
     const key = `${boardId}:${player}`;
-    // optimistic
     state.picks[key] = vote;
-    const prev = state.tallies[key] || { up: 0, down: 0 };
-    const optimistic = { up: prev.up, down: prev.down };
-    // we don't know previous vote cleanly from optimistic; just rerender buttons' active state
     updateVoteButtons(key);
+    const modal = $('#player-modal');
+    const modalOpen = modal && !modal.hidden;
+    const modalName = modalOpen ? $('#player-modal-name').textContent : null;
     try {
       const res = await fetch('/api/vote', {
         method: 'POST',
@@ -343,6 +346,7 @@
       if (data && data.tally) {
         state.tallies[key] = data.tally;
         updateTallyUI(key, data.tally);
+        if (modalOpen && modalName === player) openPlayer(player);
       }
     } catch {
       toast('Offline — vote not saved');
@@ -454,6 +458,74 @@
     }
   }
 
+  function openPlayer(name) {
+    if (!state.boards || state.boards.length === 0) return;
+    const modal = $('#player-modal');
+    if (!modal) return;
+    $('#player-modal-name').textContent = name;
+    $('#player-modal-avatar').textContent = (name[0] || '').toUpperCase();
+    // Aggregate stat line: how many markets they're favored / longshot in.
+    let favCount = 0, longshotCount = 0;
+    for (const board of state.boards) {
+      if (!board.lines.length) continue;
+      if (board.lines[0].player === name) favCount++;
+      if (board.lines[board.lines.length - 1].player === name) longshotCount++;
+    }
+    const sub = [];
+    if (favCount) sub.push(`FAV in ${favCount}`);
+    if (longshotCount) sub.push(`LONGSHOT in ${longshotCount}`);
+    sub.push(`${state.boards.length} MARKETS`);
+    $('#player-modal-sub').textContent = sub.join(' · ');
+
+    const body = $('#player-modal-body');
+    body.innerHTML = '';
+    for (const board of state.boards) {
+      const idx = board.lines.findIndex(l => l.player === name);
+      if (idx < 0) continue;
+      const line = board.lines[idx];
+      const rank = idx + 1;
+      const key = `${board.id}:${name}`;
+      const tally = state.tallies[key] || { up: 0, down: 0 };
+      const myVote = (state.picks && state.picks[key]) || null;
+      const history = state.oddsHistory[key] || [];
+
+      const oddsBox = ce('div', { class: 'player-market-odds' }, line.odds);
+      if (line.tag) oddsBox.appendChild(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
+
+      const upBtn = ce('button', {
+        class: `vote up${myVote === 'up' ? ' active up' : ''}`, type: 'button',
+        onclick: (e) => { e.stopPropagation(); castVote(board.id, name, myVote === 'up' ? null : 'up'); }
+      }, '👍 ', ce('span', { class: 'vote-count' }, String(tally.up || 0)));
+      const downBtn = ce('button', {
+        class: `vote down${myVote === 'down' ? ' active down' : ''}`, type: 'button',
+        onclick: (e) => { e.stopPropagation(); castVote(board.id, name, myVote === 'down' ? null : 'down'); }
+      }, '👎 ', ce('span', { class: 'vote-count' }, String(tally.down || 0)));
+
+      const market = ce('div', { class: 'player-market' },
+        ce('div', { class: 'player-market-head' },
+          ce('div', { class: 'player-market-emoji' }, board.emoji),
+          ce('div', { class: 'player-market-title' }, board.title)
+        ),
+        oddsBox,
+        ce('div', { class: 'player-market-foot' },
+          renderSparkline(history),
+          ce('div', { class: 'player-market-rank' }, `#${rank} of ${board.lines.length}`),
+          ce('div', { class: 'line-votes' }, upBtn, downBtn)
+        )
+      );
+      body.appendChild(market);
+    }
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closePlayer() {
+    const modal = $('#player-modal');
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
   let toastTimer = null;
   function toast(msg) {
     const el = $('#toast');
@@ -533,6 +605,9 @@
       const card = $('#parlay-card');
       if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
+    $('#player-modal-close')?.addEventListener('click', closePlayer);
+    $('#player-modal-backdrop')?.addEventListener('click', closePlayer);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePlayer(); });
   }
 
   init().catch(e => {
