@@ -167,9 +167,12 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 }
 
 .line {
-  display: grid; grid-template-columns: 22px 1fr auto auto; align-items: center;
+  display: grid; grid-template-columns: 22px 1fr 62px auto auto; align-items: center;
   gap: 10px; padding: 10px 4px; position: relative;
   border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.line-sparkline {
+  display: block; color: inherit; opacity: 0.8;
 }
 .board[data-theme="red"] .line,
 .board[data-theme="blue"] .line,
@@ -318,6 +321,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   .countdown-time { font-size: 18px; }
   main { padding: 18px 14px 60px; }
   .line { grid-template-columns: 18px 1fr auto auto; gap: 6px; }
+  .line-sparkline { display: none; }
   .line-name { font-size: 18px; }
   .line-odds { font-size: 16px; padding: 5px 10px; }
   .parlay-stats { gap: 14px; }

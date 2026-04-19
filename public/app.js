@@ -11,6 +11,7 @@
     boards: [],
     tallies: {},
     snapshotTallies: {},
+    oddsHistory: {},
     userId: null,
     picks: {},
     parlay: [],
@@ -74,6 +75,7 @@
     const data = await r.json();
     state.boards = data.boards;
     state.tallies = data.tallies || {};
+    state.oddsHistory = data.oddsHistory || {};
     if (data.refreshAt) state.refreshAt = data.refreshAt;
     snapshotNow();
     render();
@@ -89,6 +91,7 @@
         const data = JSON.parse(e.data);
         state.boards = data.boards;
         state.tallies = data.tallies || {};
+        state.oddsHistory = data.oddsHistory || {};
         if (!Object.keys(state.snapshotTallies).length) snapshotNow();
         render();
       } catch {}
@@ -205,6 +208,9 @@
     if (line.tag) nameEl.appendChild(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
     row.appendChild(nameEl);
 
+    const history = state.oddsHistory[key] || [];
+    row.appendChild(renderSparkline(history));
+
     const move = moveIndicator(snap);
     const oddsEl = ce('div', { class: 'line-odds' }, line.odds, move);
     row.appendChild(oddsEl);
@@ -232,6 +238,61 @@
     row.appendChild(click);
 
     return row;
+  }
+
+  function renderSparkline(history) {
+    const W = 62, H = 18, padX = 2, padY = 3;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'line-sparkline');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.setAttribute('aria-hidden', 'true');
+
+    if (!history || history.length < 2) {
+      // placeholder flat dash so columns align
+      const dash = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      dash.setAttribute('x1', padX); dash.setAttribute('x2', W - padX);
+      dash.setAttribute('y1', H / 2); dash.setAttribute('y2', H / 2);
+      dash.setAttribute('stroke', 'currentColor');
+      dash.setAttribute('stroke-opacity', '0.25');
+      dash.setAttribute('stroke-width', '1');
+      dash.setAttribute('stroke-dasharray', '2 2');
+      svg.appendChild(dash);
+      return svg;
+    }
+
+    const probs = history.map(americanToImplied);
+    const min = Math.min(...probs);
+    const max = Math.max(...probs);
+    const range = Math.max(max - min, 0.005);
+    const step = (W - padX * 2) / (probs.length - 1);
+    const pts = probs.map((p, i) => {
+      const x = padX + i * step;
+      const y = padY + (1 - (p - min) / range) * (H - padY * 2);
+      return [x, y];
+    });
+    const trend = probs[probs.length - 1] - probs[0];
+    const color = Math.abs(trend) < 0.005 ? 'currentColor' : (trend > 0 ? '#4ade80' : '#f87171');
+
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    poly.setAttribute('points', pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' '));
+    poly.setAttribute('fill', 'none');
+    poly.setAttribute('stroke', color);
+    poly.setAttribute('stroke-width', '1.5');
+    poly.setAttribute('stroke-linejoin', 'round');
+    poly.setAttribute('stroke-linecap', 'round');
+    if (Math.abs(trend) < 0.005) poly.setAttribute('stroke-opacity', '0.5');
+    svg.appendChild(poly);
+
+    const [lx, ly] = pts[pts.length - 1];
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('cx', lx.toFixed(1));
+    dot.setAttribute('cy', ly.toFixed(1));
+    dot.setAttribute('r', '2');
+    dot.setAttribute('fill', color);
+    svg.appendChild(dot);
+    return svg;
   }
 
   function moveIndicator(tally) {

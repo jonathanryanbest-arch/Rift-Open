@@ -193,19 +193,20 @@ const BOARDS = [
 ];
 
 const REFRESH_MS = 5 * 60 * 1000;
+const MAX_HISTORY = 12;
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {} }));
+  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {} }));
 }
 
 function loadVotes() {
   ensureDataDir();
   try {
     const data = JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8'));
-    return { tallies: {}, users: {}, oddsOverrides: {}, ...data };
+    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, ...data };
   } catch {
-    return { tallies: {}, users: {}, oddsOverrides: {} };
+    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {} };
   }
 }
 
@@ -272,7 +273,24 @@ function liveBoards() {
 }
 
 function publicState() {
-  return { boards: liveBoards(), tallies: voteState.tallies, refreshAt: nextBoundary() };
+  return {
+    boards: liveBoards(),
+    tallies: voteState.tallies,
+    oddsHistory: voteState.oddsHistory,
+    refreshAt: nextBoundary()
+  };
+}
+
+function recordHistory() {
+  const live = liveBoards();
+  for (const board of live) {
+    for (const line of board.lines) {
+      const key = keyFor(board.id, line.player);
+      const arr = voteState.oddsHistory[key] || (voteState.oddsHistory[key] = []);
+      arr.push(line.odds);
+      if (arr.length > MAX_HISTORY) arr.splice(0, arr.length - MAX_HISTORY);
+    }
+  }
 }
 
 function nextBoundary() {
@@ -297,6 +315,7 @@ function resetWindow() {
   voteState.oddsOverrides = newOverrides;
   voteState.tallies = {};
   voteState.users = {};
+  recordHistory();
   persistVotes();
   broadcast('snapshot', publicState());
 }
@@ -420,5 +439,18 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Rift Open Sportsbook running on port ${PORT}`);
+  // Seed history for any line without one so sparklines have a starting point.
+  const live = liveBoards();
+  let seeded = false;
+  for (const board of live) {
+    for (const line of board.lines) {
+      const key = keyFor(board.id, line.player);
+      if (!voteState.oddsHistory[key] || voteState.oddsHistory[key].length === 0) {
+        voteState.oddsHistory[key] = [line.odds];
+        seeded = true;
+      }
+    }
+  }
+  if (seeded) persistVotes();
   scheduleResets();
 });
