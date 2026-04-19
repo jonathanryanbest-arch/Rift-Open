@@ -88,7 +88,7 @@
     } catch { return null; }
   }
 
-  async function fetchWithTimeout(url, opts = {}, timeoutMs = 12000) {
+  async function fetchWithTimeout(url, opts = {}, timeoutMs = 20000) {
     const ctrl = new AbortController();
     const id = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
@@ -99,7 +99,7 @@
   }
 
   async function loadState() {
-    const r = await fetchWithTimeout('/api/state', { cache: 'no-store' }, 12000);
+    const r = await fetchWithTimeout('/api/state', { cache: 'no-store' }, 20000);
     if (!r.ok) throw new Error('state http ' + r.status);
     const data = await r.json();
     if (!Array.isArray(data.boards)) throw new Error('state missing boards');
