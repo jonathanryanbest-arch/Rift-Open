@@ -61,6 +61,11 @@
     if (!n) return 1;
     return n > 0 ? 1 + n / 100 : 1 + 100 / Math.abs(n);
   }
+  function americanToImplied(odds) {
+    const n = parseInt(String(odds).replace(/[^-\d]/g, ''), 10);
+    if (!n) return 0;
+    return n > 0 ? 100 / (n + 100) : Math.abs(n) / (Math.abs(n) + 100);
+  }
   function decimalToAmerican(dec) {
     if (dec <= 1) return '—';
     if (dec >= 2) return '+' + Math.round((dec - 1) * 100);
