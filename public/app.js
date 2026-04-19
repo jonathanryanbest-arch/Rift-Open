@@ -150,6 +150,9 @@
     state.es = es;
     setStatus(true);
     function applyFullState(data, opts) {
+      // On a boundary reset, votes and personal picks were wiped server-side.
+      // Clear local picks so the up/down button highlights match reality.
+      if (opts && opts.celebrate) state.picks = {};
       state.boards = data.boards;
       state.tallies = data.tallies || {};
       state.oddsHistory = data.oddsHistory || {};
@@ -850,6 +853,7 @@
       if (remain <= 0 && Date.now() - lastBoundaryAt > 8000) {
         lastBoundaryAt = Date.now();
         state.refreshAt = nextRefreshAt();
+        state.picks = {}; // match server-side vote wipe
         // SSE should deliver the 'reset' event instantly (which also fires
         // the celebration). This fetch is a safety net in case SSE is dead.
         loadState().then(() => celebrateBoundary()).catch(() => {});
