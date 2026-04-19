@@ -196,14 +196,39 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 
 .line-odds {
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 19px; letter-spacing: 1px; padding: 6px 12px; border-radius: 10px;
-  background: rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.12);
-  font-variant-numeric: tabular-nums;
+  font-size: 19px; letter-spacing: 1px; padding: 8px 14px; border-radius: 10px;
+  background: rgba(0,0,0,0.08); border: 1px solid rgba(0,0,0,0.18);
+  font-variant-numeric: tabular-nums; color: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  min-width: 84px; min-height: 40px; justify-content: center;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.line-odds:hover { border-color: rgba(231,193,107,0.6); transform: translateY(-1px); }
+.line-odds:active { transform: translateY(0) scale(0.96); }
+.line-odds-check {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: rgba(0,0,0,0.2); color: inherit;
+  font-size: 14px; font-weight: 800; line-height: 1;
+  font-family: 'Inter', sans-serif;
+}
+.line-odds.selected {
+  background: linear-gradient(180deg, var(--accent), #b8893f);
+  color: #1a130a; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(231,193,107,0.25), 0 6px 18px rgba(231,193,107,0.25);
+}
+.line-odds.selected .line-odds-check {
+  background: rgba(26,19,10,0.85); color: var(--accent);
 }
 .board[data-theme="red"] .line-odds,
 .board[data-theme="blue"] .line-odds,
 .board[data-theme="purple"] .line-odds {
-  background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14);
+}
+.board[data-theme="red"] .line-odds-check,
+.board[data-theme="blue"] .line-odds-check,
+.board[data-theme="purple"] .line-odds-check {
+  background: rgba(255,255,255,0.12);
 }
 .line-move {
   display: inline-block; font-size: 11px; margin-left: 6px;
@@ -242,12 +267,6 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 .board[data-theme="red"] .line.parlay-selected,
 .board[data-theme="blue"] .line.parlay-selected,
 .board[data-theme="purple"] .line.parlay-selected { background: rgba(231,193,107,0.14); }
-
-.line-click {
-  position: absolute; inset: 0; cursor: pointer; background: transparent;
-  border: 0; padding: 0;
-}
-.line-click:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
 
 .line-votes .vote { position: relative; z-index: 2; }
 .line-odds { position: relative; z-index: 2; }
@@ -351,7 +370,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   .line-rank { font-size: 11px; }
   .line-name { font-size: 17px; letter-spacing: 1.2px; gap: 6px; }
   .line-tag { font-size: 8px; padding: 2px 5px; }
-  .line-odds { font-size: 15px; padding: 5px 9px; border-radius: 8px; }
+  .line-odds { font-size: 16px; padding: 10px 12px; border-radius: 10px; min-width: 90px; min-height: 44px; }
+  .line-odds-check { width: 16px; height: 16px; font-size: 13px; }
   .vote { padding: 8px 9px; font-size: 13px; min-width: 44px; min-height: 36px; justify-content: center; }
   .vote-count { font-size: 11px; }
 
@@ -522,9 +542,21 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 .player-market-odds {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 22px; letter-spacing: 1.2px; color: var(--accent);
-  display: flex; align-items: center; gap: 8px;
+  display: inline-flex; align-items: center; gap: 8px;
   justify-self: end;
+  background: rgba(231,193,107,0.08); border: 1px solid rgba(231,193,107,0.25);
+  padding: 8px 14px; border-radius: 10px; min-height: 44px; cursor: pointer;
+  transition: transform 0.12s, background 0.15s, box-shadow 0.15s, border-color 0.15s;
+  font-variant-numeric: tabular-nums;
 }
+.player-market-odds:hover { background: rgba(231,193,107,0.14); border-color: rgba(231,193,107,0.5); transform: translateY(-1px); }
+.player-market-odds:active { transform: translateY(0) scale(0.96); }
+.player-market-odds.selected {
+  background: linear-gradient(180deg, var(--accent), #b8893f);
+  color: #1a130a; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(231,193,107,0.25);
+}
+.player-market-odds.selected .line-odds-check { background: rgba(26,19,10,0.85); color: var(--accent); }
 .player-market-odds .line-tag { color: #1a130a; }
 .player-market-foot {
   grid-column: 1 / -1;

@@ -276,7 +276,12 @@
     row.appendChild(renderSparkline(history));
 
     const move = moveIndicator(snap);
-    const oddsEl = ce('div', { class: 'line-odds' }, line.odds, move);
+    const oddsEl = ce('button', {
+      class: `line-odds${selected ? ' selected' : ''}`, type: 'button',
+      'aria-label': selected ? `Remove ${line.player} from parlay` : `Add ${line.player} to parlay`,
+      'aria-pressed': selected ? 'true' : 'false',
+      onclick: (e) => { e.stopPropagation(); toggleParlay(board, line); }
+    }, ce('span', { class: 'line-odds-check' }, selected ? '✓' : '+'), line.odds, move);
     row.appendChild(oddsEl);
 
     const votes = ce('div', { class: 'line-votes' });
@@ -293,13 +298,6 @@
     votes.appendChild(upBtn);
     votes.appendChild(downBtn);
     row.appendChild(votes);
-
-    const click = ce('button', {
-      class: 'line-click',
-      'aria-label': `Add ${line.player} to parlay`,
-      onclick: () => toggleParlay(board, line)
-    });
-    row.appendChild(click);
 
     return row;
   }
@@ -756,7 +754,11 @@
       const myVote = (state.picks && state.picks[key]) || null;
       const history = state.oddsHistory[key] || [];
 
-      const oddsBox = ce('div', { class: 'player-market-odds' }, line.odds);
+      const alreadyIn = state.parlay.some(p => p.key === key);
+      const oddsBox = ce('button', {
+        class: `player-market-odds${alreadyIn ? ' selected' : ''}`, type: 'button',
+        onclick: (e) => { e.stopPropagation(); toggleParlay(board, line); openPlayer(name); }
+      }, ce('span', { class: 'line-odds-check' }, alreadyIn ? '✓' : '+'), line.odds);
       if (line.tag) oddsBox.appendChild(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
 
       const upBtn = ce('button', {
