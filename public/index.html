@@ -10,6 +10,37 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,500&display=swap">
 <link rel="stylesheet" href="/app.css?v=__V__" />
+<script>
+  (function () {
+    window.__riftStatus = function (msg, kind) {
+      try {
+        var d = document.getElementById('rift-diag');
+        if (!d) {
+          d = document.createElement('div');
+          d.id = 'rift-diag';
+          d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:200;padding:8px 12px;font:12px/1.4 ui-monospace,monospace;text-align:center;word-break:break-word;';
+          document.body && document.body.insertBefore(d, document.body.firstChild);
+        }
+        d.style.background = kind === 'err' ? 'rgba(200,0,0,0.92)' : 'rgba(231,193,107,0.92)';
+        d.style.color = kind === 'err' ? '#fff' : '#1a130a';
+        d.textContent = msg;
+      } catch (e) {}
+    };
+    window.addEventListener('error', function (ev) {
+      var msg = 'JS ERROR: ' + (ev.message || 'unknown');
+      if (ev.filename) msg += ' @ ' + ev.filename.split('/').pop() + ':' + (ev.lineno || '?');
+      window.__riftStatus(msg, 'err');
+    });
+    window.addEventListener('unhandledrejection', function (ev) {
+      window.__riftStatus('PROMISE REJECTED: ' + (ev.reason && (ev.reason.message || ev.reason) || 'unknown'), 'err');
+    });
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        if (!window.__riftBooted) window.__riftStatus('app.js did not start after 3s — script may not have loaded', 'err');
+      }, 3000);
+    });
+  })();
+</script>
 </head>
 <body>
   <header class="topbar">

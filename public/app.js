@@ -1,4 +1,10 @@
 (() => {
+  window.__riftBooted = true;
+  function diag(msg, kind) {
+    if (window.__riftStatus) window.__riftStatus(msg, kind);
+  }
+  diag('app.js parsed, initializing\u2026');
+
   const REFRESH_MS = 5 * 60 * 1000;
 
   function nextRefreshAt() {
@@ -99,17 +105,22 @@
   }
 
   async function loadState() {
+    diag('fetching /api/state\u2026');
     const r = await fetchWithTimeout('/api/state', { cache: 'no-store' }, 20000);
     if (!r.ok) throw new Error('state http ' + r.status);
     const data = await r.json();
     if (!Array.isArray(data.boards)) throw new Error('state missing boards');
+    if (data.boards.length === 0) throw new Error('state returned 0 boards');
     state.boards = data.boards;
     state.tallies = data.tallies || {};
     state.oddsHistory = data.oddsHistory || {};
     if (data.refreshAt) state.refreshAt = data.refreshAt;
     saveStateCache(data);
     snapshotNow();
+    diag('loaded ' + data.boards.length + ' boards, rendering\u2026');
     render();
+    // clear the diag once everything is painted
+    setTimeout(function(){ const d = document.getElementById('rift-diag'); if (d) d.remove(); }, 400);
   }
 
   async function loadStateWithRetry(max = 5) {
