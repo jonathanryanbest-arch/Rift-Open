@@ -1,9 +1,12 @@
 (() => {
   window.__riftBooted = true;
   function diag(msg, kind) {
+    // Only show progress diagnostics when we have no data yet.
+    // Errors always show.
+    if (kind === 'err') { if (window.__riftStatus) window.__riftStatus(msg, kind); return; }
+    if (state && state.boards && state.boards.length > 0) return;
     if (window.__riftStatus) window.__riftStatus(msg, kind);
   }
-  diag('app.js parsed, initializing\u2026');
 
   const REFRESH_MS = 5 * 60 * 1000;
 
@@ -275,8 +278,14 @@
     row.appendChild(renderSparkline(history));
 
     const move = moveIndicator(snap);
-    const oddsKids = [ ce('span', { class: 'line-odds-check' }, selected ? '✓' : '+') ];
-    if (line.tag) oddsKids.push(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
+    const oddsKids = [];
+    if (selected) {
+      oddsKids.push(ce('span', { class: 'line-odds-check' }, '✓'));
+    } else if (line.tag) {
+      oddsKids.push(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
+    } else {
+      oddsKids.push(ce('span', { class: 'line-odds-check' }, '+'));
+    }
     oddsKids.push(line.odds);
     if (move && move.nodeType === 1) oddsKids.push(move);
     const oddsEl = ce('button', {
