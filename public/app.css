@@ -19,6 +19,14 @@
   --red-ink: #ffd0d0;
   --blue-bg: linear-gradient(180deg,#0c2239 0%, #061429 100%);
   --blue-ink: #cfe1ff;
+  --green-bg: linear-gradient(180deg,#cfe3c5 0%, #9bc18a 100%);
+  --green-ink: #1b3a1a;
+  --orange-bg: linear-gradient(180deg,#f2b877 0%, #d88935 100%);
+  --orange-ink: #3a1e08;
+  --purple-bg: linear-gradient(180deg,#2c1138 0%, #180722 100%);
+  --purple-ink: #f0d7ff;
+  --cream-bg: linear-gradient(180deg,#f5e8c8 0%, #e0c889 100%);
+  --cream-ink: #3a2d0f;
 }
 
 * { box-sizing: border-box; }
@@ -136,6 +144,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 .board[data-theme="tan"]    { background: var(--tan-bg);    color: var(--tan-ink); }
 .board[data-theme="red"]    { background: var(--red-bg);    color: var(--red-ink); }
 .board[data-theme="blue"]   { background: var(--blue-bg);   color: var(--blue-ink); }
+.board[data-theme="green"]  { background: var(--green-bg);  color: var(--green-ink); }
+.board[data-theme="orange"] { background: var(--orange-bg); color: var(--orange-ink); }
+.board[data-theme="purple"] { background: var(--purple-bg); color: var(--purple-ink); }
+.board[data-theme="cream"]  { background: var(--cream-bg);  color: var(--cream-ink); }
 
 .board-head { text-align: center; padding-bottom: 10px; }
 .board-emoji { font-size: 26px; line-height: 1; }
@@ -145,6 +157,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 }
 .board[data-theme="red"] .board-title { color: #ff5c5c; text-shadow: 0 0 14px rgba(255,92,92,0.25); }
 .board[data-theme="blue"] .board-title { color: #8cc2ff; text-shadow: 0 0 14px rgba(140,194,255,0.25); }
+.board[data-theme="purple"] .board-title { color: #d8a8ff; text-shadow: 0 0 14px rgba(216,168,255,0.3); }
 .board-sub {
   font-family: 'Playfair Display', serif; font-style: italic;
   opacity: 0.75; margin-top: 4px; font-size: 13px;
@@ -159,7 +172,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   border-bottom: 1px solid rgba(0,0,0,0.06);
 }
 .board[data-theme="red"] .line,
-.board[data-theme="blue"] .line { border-bottom-color: rgba(255,255,255,0.06); }
+.board[data-theme="blue"] .line,
+.board[data-theme="purple"] .line { border-bottom-color: rgba(255,255,255,0.06); }
 .line:last-child { border-bottom: 0; }
 .line-rank { opacity: 0.5; font-size: 13px; font-weight: 700; }
 .line-name {
@@ -175,6 +189,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 .line-tag.LOCK { background: #5a1018; color: #ffd9d9; }
 .board[data-theme="red"] .line-tag.FAV { background: #ff7b7b; color: #2a0506; }
 .board[data-theme="blue"] .line-tag.FAV { background: #8cc2ff; color: #061429; }
+.board[data-theme="purple"] .line-tag.FAV { background: #d8a8ff; color: #180722; }
 
 .line-odds {
   font-family: 'Bebas Neue', sans-serif;
@@ -183,7 +198,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   font-variant-numeric: tabular-nums;
 }
 .board[data-theme="red"] .line-odds,
-.board[data-theme="blue"] .line-odds {
+.board[data-theme="blue"] .line-odds,
+.board[data-theme="purple"] .line-odds {
   background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1);
 }
 .line-move {
@@ -207,7 +223,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 }
 .vote:hover { background: rgba(0,0,0,0.06); opacity: 1; transform: translateY(-1px); }
 .board[data-theme="red"] .vote:hover,
-.board[data-theme="blue"] .vote:hover { background: rgba(255,255,255,0.06); }
+.board[data-theme="blue"] .vote:hover,
+.board[data-theme="purple"] .vote:hover { background: rgba(255,255,255,0.06); }
 .vote.active.up { background: rgba(74,222,128,0.18); border-color: rgba(74,222,128,0.5); opacity: 1; }
 .vote.active.down { background: rgba(248,113,113,0.18); border-color: rgba(248,113,113,0.5); opacity: 1; }
 .vote-count { font-size: 11px; font-weight: 700; opacity: 0.7; }
@@ -220,7 +237,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 
 .line.parlay-selected { background: rgba(231,193,107,0.12); }
 .board[data-theme="red"] .line.parlay-selected,
-.board[data-theme="blue"] .line.parlay-selected { background: rgba(231,193,107,0.14); }
+.board[data-theme="blue"] .line.parlay-selected,
+.board[data-theme="purple"] .line.parlay-selected { background: rgba(231,193,107,0.14); }
 
 .line-click {
   position: absolute; inset: 0; cursor: pointer; background: transparent;

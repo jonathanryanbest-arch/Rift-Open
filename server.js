@@ -113,6 +113,82 @@ const BOARDS = [
       { player: 'MURPH',  odds: '+5000' },
       { player: 'MAX',    odds: '+8000' }
     ]
+  },
+  {
+    id: 'relief',
+    title: 'FREE RELIEF',
+    subtitle: 'Who drops without a penalty?',
+    emoji: '⛳',
+    theme: 'green',
+    lines: [
+      { player: 'MURPH',  odds: '-500',  tag: 'LOCK' },
+      { player: 'PARKER', odds: '+700' },
+      { player: 'HOAG',   odds: '+1000' },
+      { player: 'MAX',    odds: '+1400' },
+      { player: 'MANGO',  odds: '+1800' },
+      { player: 'PICKLE', odds: '+2500' },
+      { player: 'PATTY',  odds: '+3000' },
+      { player: 'DAN',    odds: '+4000' },
+      { player: 'HIPPIE', odds: '+5000' },
+      { player: 'RYAN',   odds: '+8000' }
+    ]
+  },
+  {
+    id: 'cart',
+    title: 'CART CASUALTY',
+    subtitle: 'Ran over or ran off',
+    emoji: '🛺',
+    theme: 'orange',
+    lines: [
+      { player: 'MAX',    odds: '-250',  tag: 'LOCK' },
+      { player: 'PICKLE', odds: '+400' },
+      { player: 'PATTY',  odds: '+600' },
+      { player: 'HIPPIE', odds: '+800' },
+      { player: 'PARKER', odds: '+1000' },
+      { player: 'DAN',    odds: '+1200' },
+      { player: 'MANGO',  odds: '+1500' },
+      { player: 'HOAG',   odds: '+2000' },
+      { player: 'RYAN',   odds: '+3000' },
+      { player: 'MURPH',  odds: '+4000' }
+    ]
+  },
+  {
+    id: 'barf',
+    title: 'TECHNICOLOR YAWN',
+    subtitle: 'First one to lose lunch',
+    emoji: '🤮',
+    theme: 'purple',
+    lines: [
+      { player: 'MAX',    odds: '+200',  tag: 'FAV' },
+      { player: 'MURPH',  odds: '+275' },
+      { player: 'PARKER', odds: '+350' },
+      { player: 'MANGO',  odds: '+500' },
+      { player: 'PATTY',  odds: '+800' },
+      { player: 'HIPPIE', odds: '+1200' },
+      { player: 'DAN',    odds: '+1500' },
+      { player: 'PICKLE', odds: '+2000' },
+      { player: 'HOAG',   odds: '+3000' },
+      { player: 'RYAN',   odds: '+5000' }
+    ]
+  },
+  {
+    id: 'mulligan',
+    title: 'MULLIGAN MAGNET',
+    subtitle: 'Asks for a do-over first',
+    emoji: '🔁',
+    theme: 'cream',
+    lines: [
+      { player: 'MURPH',  odds: '-400',  tag: 'LOCK' },
+      { player: 'MAX',    odds: '+500' },
+      { player: 'DAN',    odds: '+700' },
+      { player: 'MANGO',  odds: '+900' },
+      { player: 'PATTY',  odds: '+1200' },
+      { player: 'HIPPIE', odds: '+1800' },
+      { player: 'PARKER', odds: '+2500' },
+      { player: 'HOAG',   odds: '+3000' },
+      { player: 'PICKLE', odds: '+4000' },
+      { player: 'RYAN',   odds: '+6000' }
+    ]
   }
 ];
 
