@@ -374,6 +374,8 @@ function send(res, status, body, headers = {}) {
   res.end(typeof body === 'string' ? body : JSON.stringify(body));
 }
 
+const BUILD_VERSION = String(Date.now());
+
 function serveStatic(req, res) {
   const urlPath = req.url.split('?')[0];
   let filePath = path.join(PUBLIC_DIR, urlPath === '/' ? 'index.html' : urlPath);
@@ -383,8 +385,17 @@ function serveStatic(req, res) {
     if (err || !stats.isFile()) filePath = path.join(PUBLIC_DIR, 'index.html');
     const ext = path.extname(filePath).toLowerCase();
     const mime = MIME[ext] || 'application/octet-stream';
-    res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' });
-    fs.createReadStream(filePath).pipe(res);
+    const isHtml = ext === '.html';
+    if (isHtml) {
+      fs.readFile(filePath, 'utf8', (err2, data) => {
+        if (err2) { res.writeHead(500); return res.end('error'); }
+        res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+        res.end(data.replace(/__V__/g, BUILD_VERSION));
+      });
+    } else {
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'public, max-age=31536000, immutable' });
+      fs.createReadStream(filePath).pipe(res);
+    }
   });
 }
 

@@ -71,14 +71,25 @@
   }
 
   async function loadState() {
-    const r = await fetch('/api/state');
+    const r = await fetch('/api/state', { cache: 'no-store' });
+    if (!r.ok) throw new Error('state http ' + r.status);
     const data = await r.json();
+    if (!Array.isArray(data.boards)) throw new Error('state missing boards');
     state.boards = data.boards;
     state.tallies = data.tallies || {};
     state.oddsHistory = data.oddsHistory || {};
     if (data.refreshAt) state.refreshAt = data.refreshAt;
     snapshotNow();
     render();
+  }
+
+  async function loadStateWithRetry(max = 3) {
+    let lastErr;
+    for (let i = 0; i < max; i++) {
+      try { await loadState(); return; }
+      catch (e) { lastErr = e; await new Promise(r => setTimeout(r, 400 * (i + 1))); }
+    }
+    throw lastErr;
   }
 
   function connectStream() {
@@ -377,12 +388,16 @@
     const count = $('#parlay-count');
     const payout = $('#parlay-payout');
     const american = $('#parlay-american');
+    const mini = $('#parlay-mini');
+    const miniCount = $('#parlay-mini-count');
+    const miniPay = $('#parlay-mini-pay');
     legs.innerHTML = '';
     if (state.parlay.length === 0) {
       legs.appendChild(ce('div', { class: 'parlay-empty' }, 'Tap a line above to add it to your parlay.'));
       count.textContent = '0';
       payout.textContent = '—';
       american.textContent = '—';
+      if (mini) mini.classList.remove('visible');
       return;
     }
     let dec = 1;
@@ -402,6 +417,11 @@
     const pay = stake * dec;
     payout.textContent = '$' + pay.toFixed(0);
     american.textContent = decimalToAmerican(dec);
+    if (mini) {
+      mini.classList.add('visible');
+      if (miniCount) miniCount.textContent = String(state.parlay.length);
+      if (miniPay) miniPay.textContent = `$100 \u2192 $${pay.toFixed(0)}`;
+    }
   }
 
   function shareParlay() {
@@ -499,8 +519,8 @@
   async function init() {
     state.userId = getOrCreateUserId();
     loadParlay();
-    await loadMe();
-    await loadState();
+    try { await loadMe(); } catch (e) { console.warn('loadMe failed, continuing', e); }
+    await loadStateWithRetry();
     hydrateFromHash();
     render();
     connectStream();
@@ -508,10 +528,16 @@
     bumpStreak();
     $('#parlay-clear').addEventListener('click', () => { state.parlay = []; persistParlay(); render(); });
     $('#parlay-share').addEventListener('click', shareParlay);
+    const mini = $('#parlay-mini');
+    if (mini) mini.addEventListener('click', () => {
+      const card = $('#parlay-card');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   }
 
   init().catch(e => {
-    console.error(e);
-    toast('Failed to load — refresh the page');
+    console.error('init failed', e);
+    toast('Couldn\u2019t load odds — retrying\u2026');
+    setTimeout(() => location.reload(), 2500);
   });
 })();
