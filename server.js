@@ -317,7 +317,7 @@ function resetWindow() {
   voteState.users = {};
   recordHistory();
   persistVotes();
-  broadcast('snapshot', publicState());
+  broadcast('reset', publicState());
 }
 
 function scheduleResets() {

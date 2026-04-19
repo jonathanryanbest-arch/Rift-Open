@@ -149,15 +149,21 @@
     const es = new EventSource('/api/stream');
     state.es = es;
     setStatus(true);
+    function applyFullState(data, opts) {
+      state.boards = data.boards;
+      state.tallies = data.tallies || {};
+      state.oddsHistory = data.oddsHistory || {};
+      if (data.refreshAt) state.refreshAt = data.refreshAt;
+      snapshotNow();
+      saveStateCache(data);
+      render();
+      if (opts && opts.celebrate) celebrateBoundary();
+    }
     es.addEventListener('snapshot', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        state.boards = data.boards;
-        state.tallies = data.tallies || {};
-        state.oddsHistory = data.oddsHistory || {};
-        if (!Object.keys(state.snapshotTallies).length) snapshotNow();
-        render();
-      } catch {}
+      try { applyFullState(JSON.parse(e.data)); } catch {}
+    });
+    es.addEventListener('reset', (e) => {
+      try { applyFullState(JSON.parse(e.data), { celebrate: true }); } catch {}
     });
     es.addEventListener('tally', (e) => {
       try {
@@ -834,21 +840,35 @@
   function startCountdown() {
     const timeEl = $('#countdown-time');
     const barEl = $('#countdown-bar');
-    let reloading = false;
+    let lastBoundaryAt = 0;
     function tick() {
       const remain = Math.max(0, state.refreshAt - Date.now());
       const mins = Math.floor(remain / 60000);
       const secs = Math.floor((remain % 60000) / 1000);
       timeEl.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
       barEl.style.width = `${(remain / REFRESH_MS) * 100}%`;
-      if (remain <= 0 && !reloading) {
-        reloading = true;
-        timeEl.textContent = '0:00';
-        location.reload();
+      if (remain <= 0 && Date.now() - lastBoundaryAt > 8000) {
+        lastBoundaryAt = Date.now();
+        state.refreshAt = nextRefreshAt();
+        // SSE should deliver the 'reset' event instantly (which also fires
+        // the celebration). This fetch is a safety net in case SSE is dead.
+        loadState().then(() => celebrateBoundary()).catch(() => {});
       }
     }
     tick();
     setInterval(tick, 1000);
+  }
+
+  let lastCelebrateAt = 0;
+  function celebrateBoundary() {
+    const now = Date.now();
+    if (now - lastCelebrateAt < 3000) return; // dedupe: SSE + fallback fetch race
+    lastCelebrateAt = now;
+    const el = document.createElement('div');
+    el.className = 'boundary-flash';
+    el.textContent = 'ODDS UPDATED';
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1800);
   }
 
   function getStreak() {
