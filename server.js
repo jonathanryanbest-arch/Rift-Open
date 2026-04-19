@@ -26,7 +26,7 @@ const BOARDS = [
     emoji: '🏆',
     theme: 'trophy',
     lines: [
-      { player: 'MURPH',  odds: '+350',  tag: 'FAV' },
+      { player: 'MURPH',  odds: '+350' },
       { player: 'MAX',    odds: '+425' },
       { player: 'MANGO',  odds: '+500' },
       { player: 'PATTY',  odds: '+1000' },
@@ -83,7 +83,7 @@ const BOARDS = [
     emoji: '🤬',
     theme: 'red',
     lines: [
-      { player: 'MURPH',  odds: '+200',  tag: 'FAV' },
+      { player: 'MURPH',  odds: '+200' },
       { player: 'PARKER', odds: '+275' },
       { player: 'HOAG',   odds: '+350' },
       { player: 'MANGO',  odds: '+450' },
@@ -102,7 +102,7 @@ const BOARDS = [
     emoji: '📈',
     theme: 'blue',
     lines: [
-      { player: 'RYAN',   odds: '+200',  tag: 'FAV' },
+      { player: 'RYAN',   odds: '+200' },
       { player: 'DAN',    odds: '+275' },
       { player: 'PATTY',  odds: '+600' },
       { player: 'HOAG',   odds: '+900' },
@@ -159,7 +159,7 @@ const BOARDS = [
     emoji: '🤮',
     theme: 'purple',
     lines: [
-      { player: 'MAX',    odds: '+200',  tag: 'FAV' },
+      { player: 'MAX',    odds: '+200' },
       { player: 'MURPH',  odds: '+275' },
       { player: 'PARKER', odds: '+350' },
       { player: 'MANGO',  odds: '+500' },
@@ -257,7 +257,7 @@ function impliedToAmerican(p) {
 }
 
 function liveBoards() {
-  // Apply oddsOverrides on top of base BOARDS, re-sort each board, retag FAV/LOCK.
+  // Apply oddsOverrides on top of base BOARDS, re-sort each board, retag LOCK.
   return BOARDS.map(board => {
     const lines = board.lines.map(l => {
       const k = keyFor(board.id, l.player);
@@ -266,7 +266,7 @@ function liveBoards() {
     });
     lines.sort((a, b) => americanToImplied(b.odds) - americanToImplied(a.odds));
     lines.forEach((l, i) => {
-      if (i === 0) l.tag = l.odds.startsWith('-') ? 'LOCK' : 'FAV';
+      if (i === 0 && l.odds.startsWith('-')) l.tag = 'LOCK';
     });
     return { ...board, lines };
   });
