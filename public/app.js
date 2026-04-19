@@ -487,6 +487,224 @@
     );
   }
 
+  function roundRectPath(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.lineTo(x + w - rr, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+    ctx.lineTo(x + w, y + h - rr);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+    ctx.lineTo(x + rr, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+    ctx.lineTo(x, y + rr);
+    ctx.quadraticCurveTo(x, y, x + rr, y);
+    ctx.closePath();
+  }
+
+  async function renderParlayCanvas() {
+    try { await document.fonts.ready; } catch {}
+
+    const W = 1080, H = 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'alphabetic';
+
+    // Background
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1c1c22');
+    bg.addColorStop(0.5, '#141418');
+    bg.addColorStop(1, '#08080a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle radial glow
+    const glow = ctx.createRadialGradient(W / 2, H * 0.15, 60, W / 2, H * 0.15, 700);
+    glow.addColorStop(0, 'rgba(231,193,107,0.12)');
+    glow.addColorStop(1, 'rgba(231,193,107,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Top gold accent bar
+    const gold = ctx.createLinearGradient(0, 0, W, 0);
+    gold.addColorStop(0, '#e7c16b');
+    gold.addColorStop(1, '#b8893f');
+    ctx.fillStyle = gold;
+    ctx.fillRect(0, 0, W, 14);
+
+    // Logo mark
+    const markSize = 96;
+    const markX = W / 2 - markSize / 2;
+    const markY = 100;
+    ctx.fillStyle = gold;
+    roundRectPath(ctx, markX, markY, markSize, markSize, 22);
+    ctx.fill();
+    ctx.fillStyle = '#1a130a';
+    ctx.font = "900 56px 'Bebas Neue', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('RO', W / 2, markY + 66);
+
+    // Title
+    ctx.fillStyle = '#fff6dd';
+    ctx.font = "800 110px 'Bebas Neue', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('THE RIFT OPEN', W / 2, 340);
+
+    ctx.fillStyle = '#9a958b';
+    ctx.font = "600 28px 'Inter', Arial, sans-serif";
+    ctx.fillText('YEAR V · SPORTSBOOK', W / 2, 385);
+
+    // Divider
+    ctx.strokeStyle = 'rgba(231,193,107,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 60, 430);
+    ctx.lineTo(W / 2 + 60, 430);
+    ctx.stroke();
+
+    ctx.fillStyle = '#e7c16b';
+    ctx.font = "800 36px 'Bebas Neue', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('BET SLIP', W / 2, 485);
+
+    // Legs area
+    const padX = 80;
+    const legsTop = 540;
+    const legsBottom = H - 620;
+    const availableH = legsBottom - legsTop;
+    const showLegs = Math.min(state.parlay.length, 7);
+    const legH = Math.min(180, Math.floor(availableH / showLegs));
+
+    let dec = 1;
+    for (let i = 0; i < state.parlay.length; i++) {
+      dec *= americanToDecimal(state.parlay[i].odds);
+    }
+
+    for (let i = 0; i < showLegs; i++) {
+      const leg = state.parlay[i];
+      const y = legsTop + i * legH;
+
+      // Leg number
+      ctx.fillStyle = '#9a958b';
+      ctx.font = "700 22px 'Inter', Arial, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText(`LEG ${i + 1}`, padX, y + 26);
+
+      // Player name
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = `700 ${Math.min(78, Math.floor(legH * 0.48))}px 'Bebas Neue', Arial, sans-serif`;
+      ctx.fillText(leg.player, padX, y + Math.floor(legH * 0.58));
+
+      // Market subtitle
+      ctx.fillStyle = '#9a958b';
+      ctx.font = "500 26px 'Inter', Arial, sans-serif";
+      ctx.fillText(leg.boardTitle, padX, y + Math.floor(legH * 0.58) + 34);
+
+      // Odds pill
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#e7c16b';
+      ctx.font = `700 ${Math.min(62, Math.floor(legH * 0.38))}px 'Bebas Neue', Arial, sans-serif`;
+      ctx.fillText(leg.odds, W - padX, y + Math.floor(legH * 0.62));
+
+      // Divider (skip after last visible leg)
+      if (i < showLegs - 1) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padX, y + legH - 4);
+        ctx.lineTo(W - padX, y + legH - 4);
+        ctx.stroke();
+      }
+    }
+
+    if (state.parlay.length > showLegs) {
+      const y = legsTop + showLegs * legH;
+      ctx.fillStyle = '#9a958b';
+      ctx.font = "600 24px 'Inter', Arial, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(`+ ${state.parlay.length - showLegs} more leg${state.parlay.length - showLegs === 1 ? '' : 's'}`, W / 2, y + 36);
+    }
+
+    // Payout box
+    const boxX = padX, boxW = W - padX * 2;
+    const boxH = 360;
+    const boxY = H - boxH - 140;
+
+    const boxGrad = ctx.createLinearGradient(0, boxY, 0, boxY + boxH);
+    boxGrad.addColorStop(0, '#f2d58a');
+    boxGrad.addColorStop(1, '#b8893f');
+    ctx.fillStyle = boxGrad;
+    roundRectPath(ctx, boxX, boxY, boxW, boxH, 32);
+    ctx.fill();
+
+    // $100 PAYS
+    ctx.fillStyle = 'rgba(26,19,10,0.7)';
+    ctx.font = "800 30px 'Inter', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('$100 PAYS', W / 2, boxY + 76);
+
+    // Payout amount
+    const pay = 100 * dec;
+    const payStr = '$' + pay.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    ctx.fillStyle = '#1a130a';
+    ctx.font = "900 190px 'Bebas Neue', Arial, sans-serif";
+    ctx.fillText(payStr, W / 2, boxY + 240);
+
+    // Parlay meta
+    ctx.fillStyle = 'rgba(26,19,10,0.68)';
+    ctx.font = "700 24px 'Inter', Arial, sans-serif";
+    ctx.fillText(`PARLAY ${decimalToAmerican(dec)}  ·  ${state.parlay.length} LEG${state.parlay.length === 1 ? '' : 'S'}`, W / 2, boxY + 300);
+
+    // URL footer
+    ctx.fillStyle = '#6d675d';
+    ctx.font = "600 24px 'Inter', Arial, sans-serif";
+    ctx.fillText('rift-open-production.up.railway.app', W / 2, H - 70);
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/png', 0.95);
+    });
+  }
+
+  async function shareParlayCard() {
+    if (state.parlay.length === 0) { toast('Add some legs first'); return; }
+    const btn = document.getElementById('parlay-share-card');
+    const originalText = btn && btn.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating\u2026'; }
+    try {
+      const blob = await renderParlayCanvas();
+      if (!blob) throw new Error('no blob');
+      const file = new File([blob], 'rift-open-parlay.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'My Rift Open Parlay',
+            text: 'Bet the board. Fade your friends.'
+          });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+          // fall through to download
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'rift-open-parlay.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast('Image saved — find it in your Photos or Downloads');
+    } catch (e) {
+      console.error('share card failed', e);
+      toast('Couldn\u2019t make the image');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    }
+  }
+
   function hydrateFromHash() {
     const m = location.hash.match(/p=([^&]+)/);
     if (!m) return;
@@ -719,6 +937,7 @@
     bumpStreak();
     $('#parlay-clear').addEventListener('click', () => { state.parlay = []; persistParlay(); render(); });
     $('#parlay-share').addEventListener('click', shareParlay);
+    $('#parlay-share-card')?.addEventListener('click', shareParlayCard);
     const mini = $('#parlay-mini');
     if (mini) mini.addEventListener('click', () => {
       const card = $('#parlay-card');
