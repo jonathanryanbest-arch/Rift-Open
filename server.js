@@ -402,6 +402,10 @@ function serveStatic(req, res) {
 const server = http.createServer(async (req, res) => {
   const url = req.url.split('?')[0];
 
+  if (req.method === 'GET' && (url === '/healthz' || url === '/api/health')) {
+    return send(res, 200, { ok: true, version: BUILD_VERSION, boards: BOARDS.length });
+  }
+
   if (req.method === 'GET' && url === '/api/state') {
     return send(res, 200, publicState());
   }

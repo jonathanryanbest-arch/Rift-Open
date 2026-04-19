@@ -73,6 +73,7 @@
   const STATE_CACHE_KEY = 'rift_state_cache_v1';
 
   function saveStateCache(data) {
+    if (!data || !Array.isArray(data.boards) || data.boards.length === 0) return;
     try {
       localStorage.setItem(STATE_CACHE_KEY, JSON.stringify({ t: Date.now(), data }));
     } catch {}
@@ -82,7 +83,7 @@
       const raw = localStorage.getItem(STATE_CACHE_KEY);
       if (!raw) return null;
       const { t, data } = JSON.parse(raw);
-      if (!data || !Array.isArray(data.boards)) return null;
+      if (!data || !Array.isArray(data.boards) || data.boards.length === 0) return null;
       return { t, data };
     } catch { return null; }
   }
@@ -648,6 +649,29 @@
     }
   }
 
+  function showFatalRetry(msg) {
+    const container = $('#boards');
+    if (!container) return;
+    container.innerHTML = '';
+    const card = ce('div', { class: 'boards-placeholder' },
+      ce('div', { class: 'boards-placeholder-title' }, msg || 'Couldn\u2019t load'),
+      ce('div', { class: 'boards-placeholder-sub' }, 'Something errored out on the page. Tap retry or hard-refresh.'),
+      ce('button', {
+        class: 'boards-placeholder-retry', type: 'button',
+        onclick: () => location.reload()
+      }, 'Reload')
+    );
+    container.appendChild(card);
+  }
+
+  window.addEventListener('error', (e) => {
+    console.error('window error', e.error || e.message);
+    if (!state.boards || state.boards.length === 0) showFatalRetry('Script error');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('unhandled rejection', e.reason);
+  });
+
   async function init() {
     state.userId = getOrCreateUserId();
     loadParlay();
@@ -662,12 +686,18 @@
       snapshotNow();
       hydrateFromHash();
       render();
-    } else {
-      renderLoadingPlaceholder('Loading odds\u2026', false);
     }
+    // else: the HTML-embedded initial loader is already visible.
 
     loadMe().catch(e => console.warn('loadMe failed, continuing', e));
     bootData();
+
+    // Safety net: if after 25s we still have no boards visible, surface a retry UI.
+    setTimeout(() => {
+      if (!state.boards || state.boards.length === 0) {
+        renderLoadingPlaceholder('Still loading\u2026 tap retry if nothing changes', true);
+      }
+    }, 25000);
 
     startCountdown();
     bumpStreak();

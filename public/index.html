@@ -36,7 +36,12 @@
       <p>👍 if the line's a steal. 👎 if it's garbage. The crowd moves the board in real time. Build a parlay below to flex on the group chat.</p>
     </section>
 
-    <section class="boards" id="boards"></section>
+    <section class="boards" id="boards">
+      <div class="boards-placeholder" id="boards-initial-loader">
+        <div class="boards-placeholder-title">Loading odds&hellip;</div>
+        <div class="boards-placeholder-sub">First load after an idle period can take a few seconds while the server wakes up.</div>
+      </div>
+    </section>
 
     <section class="parlay-section">
       <div class="parlay-card" id="parlay-card">
