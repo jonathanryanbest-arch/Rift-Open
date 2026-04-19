@@ -269,19 +269,22 @@
       'aria-label': `View ${line.player}'s full profile`,
       onclick: (e) => { e.stopPropagation(); openPlayer(line.player); }
     }, line.player);
-    if (line.tag) nameEl.appendChild(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
     row.appendChild(nameEl);
 
     const history = state.oddsHistory[key] || [];
     row.appendChild(renderSparkline(history));
 
     const move = moveIndicator(snap);
+    const oddsKids = [ ce('span', { class: 'line-odds-check' }, selected ? '✓' : '+') ];
+    if (line.tag) oddsKids.push(ce('span', { class: `line-tag ${line.tag}` }, line.tag));
+    oddsKids.push(line.odds);
+    if (move && move.nodeType === 1) oddsKids.push(move);
     const oddsEl = ce('button', {
-      class: `line-odds${selected ? ' selected' : ''}`, type: 'button',
+      class: `line-odds${selected ? ' selected' : ''}${line.tag ? ' has-tag' : ''}`, type: 'button',
       'aria-label': selected ? `Remove ${line.player} from parlay` : `Add ${line.player} to parlay`,
       'aria-pressed': selected ? 'true' : 'false',
       onclick: (e) => { e.stopPropagation(); toggleParlay(board, line); }
-    }, ce('span', { class: 'line-odds-check' }, selected ? '✓' : '+'), line.odds, move);
+    }, ...oddsKids);
     row.appendChild(oddsEl);
 
     const votes = ce('div', { class: 'line-votes' });
