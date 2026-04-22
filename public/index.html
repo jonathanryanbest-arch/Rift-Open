@@ -67,6 +67,15 @@
       <p>👍 if the line's a steal. 👎 if it's garbage. The crowd moves the board in real time. Build a parlay below to flex on the group chat.</p>
     </section>
 
+    <button class="proposal-banner" id="proposal-banner" hidden type="button" aria-label="Open ruling ballot">
+      <div class="proposal-banner-kicker" id="proposal-banner-kicker">OFFICIAL RULING</div>
+      <div class="proposal-banner-body">
+        <div class="proposal-banner-title" id="proposal-banner-title">—</div>
+        <div class="proposal-banner-tally" id="proposal-banner-tally">—</div>
+      </div>
+      <div class="proposal-banner-cta" id="proposal-banner-cta">VOTE</div>
+    </button>
+
     <section class="boards" id="boards">
       <div class="boards-placeholder" id="boards-initial-loader" style="grid-column:1/-1;padding:40px 24px;border:1px dashed rgba(255,255,255,0.08);border-radius:18px;background:rgba(255,255,255,0.02);text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;color:#f4efe6;">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;">Loading odds&hellip;</div>
@@ -108,6 +117,30 @@
       <div class="footer-sub" style="margin-top:4px;opacity:0.35;font-size:9px;">build __V__</div>
     </footer>
   </main>
+
+  <div class="proposal-modal" id="proposal-modal" hidden>
+    <div class="proposal-modal-backdrop" id="proposal-modal-backdrop"></div>
+    <div class="proposal-modal-card" role="dialog" aria-modal="true" aria-labelledby="proposal-modal-title">
+      <button class="proposal-modal-close" id="proposal-modal-close" type="button" aria-label="Close">✕</button>
+      <div class="proposal-modal-emoji" id="proposal-modal-emoji">⛳</div>
+      <div class="proposal-modal-kicker" id="proposal-modal-kicker">OFFICIAL RULING</div>
+      <div class="proposal-modal-title" id="proposal-modal-title">—</div>
+      <div class="proposal-modal-sub" id="proposal-modal-sub">—</div>
+      <div class="proposal-modal-options">
+        <button class="proposal-option proposal-yes" id="proposal-yes" type="button">
+          <div class="proposal-option-label" id="proposal-yes-label">YES</div>
+          <div class="proposal-option-blurb" id="proposal-yes-blurb">—</div>
+          <div class="proposal-option-tally" id="proposal-yes-tally">0</div>
+        </button>
+        <button class="proposal-option proposal-no" id="proposal-no" type="button">
+          <div class="proposal-option-label" id="proposal-no-label">NO</div>
+          <div class="proposal-option-blurb" id="proposal-no-blurb">—</div>
+          <div class="proposal-option-tally" id="proposal-no-tally">0</div>
+        </button>
+      </div>
+      <div class="proposal-modal-meta" id="proposal-modal-meta"></div>
+    </div>
+  </div>
 
   <div class="player-modal" id="player-modal" hidden>
     <div class="player-modal-backdrop" id="player-modal-backdrop"></div>

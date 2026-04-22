@@ -21,6 +21,8 @@
     tallies: {},
     snapshotTallies: {},
     oddsHistory: {},
+    proposals: [],
+    proposalVotes: {},
     userId: null,
     picks: {},
     parlay: [],
@@ -82,6 +84,8 @@
     state.userId = data.userId;
     localStorage.setItem('rift_uid', data.userId);
     state.picks = data.picks || {};
+    state.proposalVotes = data.proposalVotes || {};
+    renderProposal();
   }
 
   const STATE_CACHE_KEY = 'rift_state_cache_v1';
@@ -122,11 +126,13 @@
     state.boards = data.boards;
     state.tallies = data.tallies || {};
     state.oddsHistory = data.oddsHistory || {};
+    state.proposals = data.proposals || [];
     if (data.refreshAt) state.refreshAt = data.refreshAt;
     saveStateCache(data);
     snapshotNow();
     diag('loaded ' + data.boards.length + ' boards, rendering\u2026');
     render();
+    renderProposal();
     // clear the diag once everything is painted
     setTimeout(function(){ const d = document.getElementById('rift-diag'); if (d) d.remove(); }, 400);
   }
@@ -156,10 +162,12 @@
       state.boards = data.boards;
       state.tallies = data.tallies || {};
       state.oddsHistory = data.oddsHistory || {};
+      state.proposals = data.proposals || state.proposals || [];
       if (data.refreshAt) state.refreshAt = data.refreshAt;
       snapshotNow();
       saveStateCache(data);
       render();
+      renderProposal();
       if (opts && opts.celebrate) celebrateBoundary();
     }
     es.addEventListener('snapshot', (e) => {
@@ -174,6 +182,13 @@
         state.tallies[key] = tally;
         updateTallyUI(key, tally);
         pingToast(key);
+      } catch {}
+    });
+    es.addEventListener('proposal', (e) => {
+      try {
+        const { id, tally } = JSON.parse(e.data);
+        const p = state.proposals.find(x => x.id === id);
+        if (p) { p.tally = tally; renderProposal(); }
       } catch {}
     });
     es.onerror = () => {
@@ -809,6 +824,88 @@
     document.body.style.overflow = 'hidden';
   }
 
+  function renderProposal() {
+    const banner = $('#proposal-banner');
+    if (!banner) return;
+    const p = state.proposals && state.proposals[0];
+    if (!p) { banner.hidden = true; return; }
+    const tally = p.tally || { yes: 0, no: 0 };
+    const total = tally.yes + tally.no;
+    const myVote = (state.proposalVotes || {})[p.id] || null;
+    $('#proposal-banner-kicker').textContent = p.kicker || 'OFFICIAL RULING';
+    $('#proposal-banner-title').textContent = p.title;
+    const pct = total > 0 ? Math.round((tally.yes / total) * 100) : 0;
+    const tallyEl = $('#proposal-banner-tally');
+    tallyEl.innerHTML = '';
+    if (myVote) {
+      tallyEl.appendChild(document.createTextNode('YOU VOTED '));
+      const b = document.createElement('b'); b.textContent = myVote.toUpperCase(); tallyEl.appendChild(b);
+      tallyEl.appendChild(document.createTextNode(` · ${total} BALLOT${total === 1 ? '' : 'S'} · ${pct}% YES`));
+    } else {
+      tallyEl.appendChild(document.createTextNode(`${total} BALLOT${total === 1 ? '' : 'S'} CAST · ${pct}% YES`));
+    }
+    $('#proposal-banner-cta').textContent = myVote ? 'CHANGE' : 'VOTE';
+    banner.classList.toggle('voted', !!myVote);
+    banner.hidden = false;
+  }
+
+  function openProposal() {
+    const p = state.proposals && state.proposals[0];
+    if (!p) return;
+    const modal = $('#proposal-modal');
+    if (!modal) return;
+    const tally = p.tally || { yes: 0, no: 0 };
+    const myVote = (state.proposalVotes || {})[p.id] || null;
+    $('#proposal-modal-emoji').textContent = p.emoji || '🗳️';
+    $('#proposal-modal-kicker').textContent = p.kicker || 'OFFICIAL RULING';
+    $('#proposal-modal-title').textContent = p.title;
+    $('#proposal-modal-sub').textContent = p.subtitle || '';
+    $('#proposal-yes-label').textContent = p.yesLabel || 'YES';
+    $('#proposal-no-label').textContent = p.noLabel || 'NO';
+    $('#proposal-yes-blurb').textContent = p.yesBlurb || '';
+    $('#proposal-no-blurb').textContent = p.noBlurb || '';
+    $('#proposal-yes-tally').textContent = String(tally.yes || 0);
+    $('#proposal-no-tally').textContent = String(tally.no || 0);
+    $('#proposal-yes').classList.toggle('selected', myVote === 'yes');
+    $('#proposal-no').classList.toggle('selected', myVote === 'no');
+    const meta = $('#proposal-modal-meta');
+    meta.textContent = myVote ? `Tap again to undo your ${myVote.toUpperCase()} vote` : 'One vote per person. You can change it anytime.';
+    modal.hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeProposal() {
+    const modal = $('#proposal-modal');
+    if (!modal) return;
+    modal.hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  async function castProposalVote(proposalId, vote) {
+    const current = (state.proposalVotes || {})[proposalId] || null;
+    const next = current === vote ? null : vote; // toggle off if re-tap
+    state.proposalVotes = state.proposalVotes || {};
+    if (next === null) delete state.proposalVotes[proposalId];
+    else state.proposalVotes[proposalId] = next;
+    renderProposal();
+    openProposal(); // refresh modal button states + meta text
+    try {
+      const res = await fetch('/api/proposal-vote', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: state.userId, proposalId, vote: next })
+      });
+      const data = await res.json();
+      if (data && data.tally) {
+        const p = state.proposals.find(x => x.id === proposalId);
+        if (p) p.tally = data.tally;
+        renderProposal();
+        openProposal();
+      }
+    } catch {
+      toast('Offline — vote not saved');
+    }
+  }
+
   function closePlayer() {
     const modal = $('#player-modal');
     if (!modal) return;
@@ -983,7 +1080,28 @@
     });
     $('#player-modal-close')?.addEventListener('click', closePlayer);
     $('#player-modal-backdrop')?.addEventListener('click', closePlayer);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePlayer(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePlayer(); closeProposal(); } });
+
+    $('#proposal-banner')?.addEventListener('click', openProposal);
+    $('#proposal-modal-close')?.addEventListener('click', closeProposal);
+    $('#proposal-modal-backdrop')?.addEventListener('click', closeProposal);
+    $('#proposal-yes')?.addEventListener('click', () => {
+      const p = state.proposals && state.proposals[0]; if (p) castProposalVote(p.id, 'yes');
+    });
+    $('#proposal-no')?.addEventListener('click', () => {
+      const p = state.proposals && state.proposals[0]; if (p) castProposalVote(p.id, 'no');
+    });
+    // Auto-open the ballot on first visit if the user hasn't voted on it yet.
+    setTimeout(() => {
+      const p = state.proposals && state.proposals[0];
+      if (!p) return;
+      const dismissed = localStorage.getItem('rift_proposal_shown_' + p.id);
+      const voted = (state.proposalVotes || {})[p.id];
+      if (!voted && !dismissed) {
+        openProposal();
+        localStorage.setItem('rift_proposal_shown_' + p.id, '1');
+      }
+    }, 800);
 
     // When the tab becomes visible again after being backgrounded on mobile,
     // SSE may be dead. Refresh state and reconnect.

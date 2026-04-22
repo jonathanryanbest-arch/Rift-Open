@@ -195,18 +195,32 @@ const BOARDS = [
 const REFRESH_MS = 5 * 60 * 1000;
 const MAX_HISTORY = 12;
 
+const PROPOSALS = [
+  {
+    id: 'murph-blue-tees',
+    kicker: 'OFFICIAL RULING',
+    emoji: '⛳',
+    title: 'Move Murph back to the blue tees this year?',
+    subtitle: 'A motion has been filed. Year V tournament ballot.',
+    yesLabel: 'YES · BLUES',
+    noLabel: 'NO · LEAVE HIM',
+    yesBlurb: 'He earned it',
+    noBlurb: 'Spare him the shame'
+  }
+];
+
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {} }));
+  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {} }));
 }
 
 function loadVotes() {
   ensureDataDir();
   try {
     const data = JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8'));
-    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, ...data };
+    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {}, ...data };
   } catch {
-    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {} };
+    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {} };
   }
 }
 
@@ -272,13 +286,39 @@ function liveBoards() {
   });
 }
 
+function publicProposals() {
+  return PROPOSALS.map(p => ({
+    ...p,
+    tally: ((voteState.proposals || {})[p.id] || {}).tally || { yes: 0, no: 0 }
+  }));
+}
+
 function publicState() {
   return {
     boards: liveBoards(),
     tallies: voteState.tallies,
     oddsHistory: voteState.oddsHistory,
+    proposals: publicProposals(),
     refreshAt: nextBoundary()
   };
+}
+
+function applyProposalVote(userId, proposalId, vote) {
+  if (!['yes', 'no', null].includes(vote)) return null;
+  const def = PROPOSALS.find(p => p.id === proposalId);
+  if (!def) return null;
+  voteState.proposals = voteState.proposals || {};
+  const p = voteState.proposals[proposalId] = voteState.proposals[proposalId] || { tally: { yes: 0, no: 0 }, votes: {} };
+  const prev = p.votes[userId] || null;
+  if (prev === 'yes') p.tally.yes = Math.max(0, p.tally.yes - 1);
+  if (prev === 'no') p.tally.no = Math.max(0, p.tally.no - 1);
+  if (vote === 'yes') p.tally.yes += 1;
+  if (vote === 'no') p.tally.no += 1;
+  if (vote === null) delete p.votes[userId];
+  else p.votes[userId] = vote;
+  persistVotes();
+  broadcast('proposal', { id: proposalId, tally: p.tally });
+  return p.tally;
 }
 
 function recordHistory() {
@@ -414,7 +454,11 @@ const server = http.createServer(async (req, res) => {
     const query = new URL(req.url, 'http://x').searchParams;
     const userId = query.get('uid') || crypto.randomUUID();
     const picks = voteState.users[userId] || {};
-    return send(res, 200, { userId, picks });
+    const proposalVotes = {};
+    for (const [pid, data] of Object.entries(voteState.proposals || {})) {
+      if (data && data.votes && data.votes[userId]) proposalVotes[pid] = data.votes[userId];
+    }
+    return send(res, 200, { userId, picks, proposalVotes });
   }
 
   if (req.method === 'POST' && url === '/api/vote') {
@@ -425,6 +469,19 @@ const server = http.createServer(async (req, res) => {
       const tally = applyVote(userId, boardId, player, vote === null ? null : vote);
       if (!tally && vote !== null) return send(res, 400, { error: 'invalid vote' });
       return send(res, 200, { ok: true, tally: voteState.tallies[keyFor(boardId, player)] || { up: 0, down: 0 } });
+    } catch (e) {
+      return send(res, 400, { error: 'bad json' });
+    }
+  }
+
+  if (req.method === 'POST' && url === '/api/proposal-vote') {
+    try {
+      const body = await readBody(req);
+      const { userId, proposalId, vote } = body;
+      if (!userId || !proposalId) return send(res, 400, { error: 'missing fields' });
+      const tally = applyProposalVote(userId, proposalId, vote === null ? null : vote);
+      if (!tally && vote !== null) return send(res, 400, { error: 'invalid vote' });
+      return send(res, 200, { ok: true, tally: ((voteState.proposals || {})[proposalId] || {}).tally || { yes: 0, no: 0 } });
     } catch (e) {
       return send(res, 400, { error: 'bad json' });
     }
