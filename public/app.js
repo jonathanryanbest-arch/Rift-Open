@@ -862,8 +862,12 @@
     $('#proposal-modal-sub').textContent = p.subtitle || '';
     $('#proposal-yes-label').textContent = p.yesLabel || 'YES';
     $('#proposal-no-label').textContent = p.noLabel || 'NO';
-    $('#proposal-yes-blurb').textContent = p.yesBlurb || '';
-    $('#proposal-no-blurb').textContent = p.noBlurb || '';
+    const yesBlurbEl = $('#proposal-yes-blurb');
+    const noBlurbEl = $('#proposal-no-blurb');
+    yesBlurbEl.textContent = p.yesBlurb || '';
+    noBlurbEl.textContent = p.noBlurb || '';
+    yesBlurbEl.style.display = p.yesBlurb ? '' : 'none';
+    noBlurbEl.style.display = p.noBlurb ? '' : 'none';
     $('#proposal-yes-tally').textContent = String(tally.yes || 0);
     $('#proposal-no-tally').textContent = String(tally.no || 0);
     $('#proposal-yes').classList.toggle('selected', myVote === 'yes');

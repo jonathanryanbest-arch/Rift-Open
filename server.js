@@ -202,10 +202,10 @@ const PROPOSALS = [
     emoji: '⛳',
     title: 'Move Murph back to the blue tees this year?',
     subtitle: 'A motion has been filed. Year V tournament ballot.',
-    yesLabel: 'YES · BLUES',
-    noLabel: 'NO · LEAVE HIM',
-    yesBlurb: 'He earned it',
-    noBlurb: 'Spare him the shame'
+    yesLabel: 'he has a simulator, yes',
+    noLabel: 'I wanna lose, so no.',
+    yesBlurb: '',
+    noBlurb: ''
   }
 ];
 
