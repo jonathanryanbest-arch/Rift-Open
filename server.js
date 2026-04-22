@@ -189,6 +189,44 @@ const BOARDS = [
       { player: 'PICKLE', odds: '+4000' },
       { player: 'RYAN',   odds: '+6000' }
     ]
+  },
+  {
+    id: 'rulebook',
+    title: 'THE RULEBOOK',
+    subtitle: 'First to bring up the rules of golf',
+    emoji: '📜',
+    theme: 'cream',
+    lines: [
+      { player: 'PICKLE', odds: '-500',  tag: 'LOCK' },
+      { player: 'MURPH',  odds: '+1000' },
+      { player: 'MAX',    odds: '+1000' },
+      { player: 'MANGO',  odds: '+1000' },
+      { player: 'PATTY',  odds: '+1000' },
+      { player: 'HIPPIE', odds: '+1000' },
+      { player: 'RYAN',   odds: '+1000' },
+      { player: 'PARKER', odds: '+1000' },
+      { player: 'DAN',    odds: '+1000' },
+      { player: 'HOAG',   odds: '+1000' }
+    ]
+  },
+  {
+    id: 'quit',
+    title: "I'M GONNA QUIT",
+    subtitle: 'First to threaten to quit the tournament and golf altogether',
+    emoji: '🏳️',
+    theme: 'red',
+    lines: [
+      { player: 'DAN',    odds: '+140' },
+      { player: 'PICKLE', odds: '+160' },
+      { player: 'HOAG',   odds: '+350' },
+      { player: 'MAX',    odds: '+1200' },
+      { player: 'MURPH',  odds: '+1500' },
+      { player: 'MANGO',  odds: '+1800' },
+      { player: 'PARKER', odds: '+2000' },
+      { player: 'HIPPIE', odds: '+2500' },
+      { player: 'PATTY',  odds: '+3000' },
+      { player: 'RYAN',   odds: '+5000' }
+    ]
   }
 ];
 
@@ -248,6 +286,28 @@ const PROPOSALS = [
     subtitle: 'Motion for enhanced focus. Year V tournament ballot.',
     yesLabel: 'let him cook, yes',
     noLabel: 'keep him sober, no',
+    yesBlurb: '',
+    noBlurb: ''
+  },
+  {
+    id: 'max-beers-wake-up',
+    kicker: 'OFFICIAL RULING',
+    emoji: '🛏️',
+    title: "Should Max's beers count from when he wakes up?",
+    subtitle: 'Motion to backdate the stroke bonus. Year V tournament ballot.',
+    yesLabel: "that's when he starts drinking, yes",
+    noLabel: "he'll never make it to the course, no",
+    yesBlurb: '',
+    noBlurb: ''
+  },
+  {
+    id: 'into-the-woods',
+    kicker: 'OFFICIAL RULING',
+    emoji: '🌲',
+    title: "Ban throwing another player's ball into the woods?",
+    subtitle: 'Motion on ball etiquette. Year V tournament ballot.',
+    yesLabel: 'pass the rule, yes',
+    noLabel: 'let them cry, no',
     yesBlurb: '',
     noBlurb: ''
   }
