@@ -206,6 +206,17 @@ const PROPOSALS = [
     noLabel: 'I wanna lose, so no.',
     yesBlurb: '',
     noBlurb: ''
+  },
+  {
+    id: 'pat-down-parker',
+    kicker: 'OFFICIAL RULING',
+    emoji: '🕵️',
+    title: 'Should we pat down Parker this year?',
+    subtitle: 'Motion to search the bag. Year V tournament ballot.',
+    yesLabel: 'pat him down, yes',
+    noLabel: 'hands off, no',
+    yesBlurb: '',
+    noBlurb: ''
   }
 ];
 

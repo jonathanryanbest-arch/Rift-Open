@@ -23,6 +23,7 @@
     oddsHistory: {},
     proposals: [],
     proposalVotes: {},
+    activeProposalId: null,
     userId: null,
     picks: {},
     parlay: [],
@@ -824,34 +825,68 @@
     document.body.style.overflow = 'hidden';
   }
 
-  function renderProposal() {
-    const banner = $('#proposal-banner');
-    if (!banner) return;
-    const p = state.proposals && state.proposals[0];
-    if (!p) { banner.hidden = true; return; }
+  function buildProposalBanner(p) {
     const tally = p.tally || { yes: 0, no: 0 };
     const total = tally.yes + tally.no;
     const myVote = (state.proposalVotes || {})[p.id] || null;
-    $('#proposal-banner-kicker').textContent = p.kicker || 'OFFICIAL RULING';
-    $('#proposal-banner-title').textContent = p.title;
     const pct = total > 0 ? Math.round((tally.yes / total) * 100) : 0;
-    const tallyEl = $('#proposal-banner-tally');
-    tallyEl.innerHTML = '';
+
+    const btn = document.createElement('button');
+    btn.className = 'proposal-banner' + (myVote ? ' voted' : '');
+    btn.type = 'button';
+    btn.setAttribute('aria-label', 'Open ballot: ' + p.title);
+    btn.addEventListener('click', () => openProposal(p.id));
+
+    const kicker = document.createElement('div');
+    kicker.className = 'proposal-banner-kicker';
+    kicker.textContent = p.kicker || 'OFFICIAL RULING';
+    btn.appendChild(kicker);
+
+    const body = document.createElement('div');
+    body.className = 'proposal-banner-body';
+    const title = document.createElement('div');
+    title.className = 'proposal-banner-title';
+    title.textContent = p.title;
+    body.appendChild(title);
+
+    const tallyEl = document.createElement('div');
+    tallyEl.className = 'proposal-banner-tally';
     if (myVote) {
       tallyEl.appendChild(document.createTextNode('YOU VOTED '));
       const b = document.createElement('b'); b.textContent = myVote.toUpperCase(); tallyEl.appendChild(b);
       tallyEl.appendChild(document.createTextNode(` · ${total} BALLOT${total === 1 ? '' : 'S'} · ${pct}% YES`));
     } else {
-      tallyEl.appendChild(document.createTextNode(`${total} BALLOT${total === 1 ? '' : 'S'} CAST · ${pct}% YES`));
+      tallyEl.textContent = `${total} BALLOT${total === 1 ? '' : 'S'} CAST · ${pct}% YES`;
     }
-    $('#proposal-banner-cta').textContent = myVote ? 'CHANGE' : 'VOTE';
-    banner.classList.toggle('voted', !!myVote);
-    banner.hidden = false;
+    body.appendChild(tallyEl);
+    btn.appendChild(body);
+
+    const cta = document.createElement('div');
+    cta.className = 'proposal-banner-cta';
+    cta.textContent = myVote ? 'CHANGE' : 'VOTE';
+    btn.appendChild(cta);
+
+    return btn;
   }
 
-  function openProposal() {
-    const p = state.proposals && state.proposals[0];
+  function renderProposal() {
+    const container = $('#proposal-banners');
+    if (!container) return;
+    container.innerHTML = '';
+    for (const p of state.proposals || []) {
+      container.appendChild(buildProposalBanner(p));
+    }
+    // If a modal is already open for a proposal that still exists, refresh it.
+    if (state.activeProposalId && state.proposals.some(p => p.id === state.activeProposalId)) {
+      const modal = $('#proposal-modal');
+      if (modal && !modal.hidden) openProposal(state.activeProposalId);
+    }
+  }
+
+  function openProposal(id) {
+    const p = state.proposals.find(x => x.id === id) || state.proposals[0];
     if (!p) return;
+    state.activeProposalId = p.id;
     const modal = $('#proposal-modal');
     if (!modal) return;
     const tally = p.tally || { yes: 0, no: 0 };
@@ -883,6 +918,7 @@
     if (!modal) return;
     modal.hidden = true;
     document.body.style.overflow = '';
+    state.activeProposalId = null;
   }
 
   async function castProposalVote(proposalId, vote) {
@@ -892,7 +928,7 @@
     if (next === null) delete state.proposalVotes[proposalId];
     else state.proposalVotes[proposalId] = next;
     renderProposal();
-    openProposal(); // refresh modal button states + meta text
+    openProposal(proposalId);
     try {
       const res = await fetch('/api/proposal-vote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -903,7 +939,7 @@
         const p = state.proposals.find(x => x.id === proposalId);
         if (p) p.tally = data.tally;
         renderProposal();
-        openProposal();
+        openProposal(proposalId);
       }
     } catch {
       toast('Offline — vote not saved');
@@ -1086,24 +1122,24 @@
     $('#player-modal-backdrop')?.addEventListener('click', closePlayer);
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePlayer(); closeProposal(); } });
 
-    $('#proposal-banner')?.addEventListener('click', openProposal);
     $('#proposal-modal-close')?.addEventListener('click', closeProposal);
     $('#proposal-modal-backdrop')?.addEventListener('click', closeProposal);
     $('#proposal-yes')?.addEventListener('click', () => {
-      const p = state.proposals && state.proposals[0]; if (p) castProposalVote(p.id, 'yes');
+      if (state.activeProposalId) castProposalVote(state.activeProposalId, 'yes');
     });
     $('#proposal-no')?.addEventListener('click', () => {
-      const p = state.proposals && state.proposals[0]; if (p) castProposalVote(p.id, 'no');
+      if (state.activeProposalId) castProposalVote(state.activeProposalId, 'no');
     });
-    // Auto-open the ballot on first visit if the user hasn't voted on it yet.
+    // Auto-open the first unvoted-and-undismissed ballot on first visit.
     setTimeout(() => {
-      const p = state.proposals && state.proposals[0];
-      if (!p) return;
-      const dismissed = localStorage.getItem('rift_proposal_shown_' + p.id);
-      const voted = (state.proposalVotes || {})[p.id];
-      if (!voted && !dismissed) {
-        openProposal();
-        localStorage.setItem('rift_proposal_shown_' + p.id, '1');
+      for (const p of state.proposals || []) {
+        const dismissed = localStorage.getItem('rift_proposal_shown_' + p.id);
+        const voted = (state.proposalVotes || {})[p.id];
+        if (!voted && !dismissed) {
+          openProposal(p.id);
+          localStorage.setItem('rift_proposal_shown_' + p.id, '1');
+          break;
+        }
       }
     }, 800);
 

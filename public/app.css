@@ -426,10 +426,12 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   100% { background: transparent; }
 }
 
+.proposal-banners { display: flex; flex-direction: column; gap: 10px; margin: 0 0 22px; }
+.proposal-banners:empty { display: none; }
 .proposal-banner[hidden] { display: none; }
 .proposal-banner {
   display: flex; align-items: center; gap: 14px;
-  width: 100%; margin: 0 0 22px;
+  width: 100%; margin: 0;
   padding: 14px 18px; border-radius: 14px;
   background: linear-gradient(100deg, #2a1c0a 0%, #3d280c 50%, #2a1c0a 100%);
   border: 1px solid rgba(231,193,107,0.35);
