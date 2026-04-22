@@ -871,16 +871,65 @@
 
   function renderProposal() {
     const container = $('#proposal-banners');
+    const dotsEl = $('#proposal-dots');
     if (!container) return;
     container.innerHTML = '';
-    for (const p of state.proposals || []) {
+    const proposals = state.proposals || [];
+    for (const p of proposals) {
       container.appendChild(buildProposalBanner(p));
     }
+    if (dotsEl) {
+      dotsEl.innerHTML = '';
+      if (proposals.length > 1) {
+        dotsEl.hidden = false;
+        proposals.forEach((p, i) => {
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'proposal-dot' + (i === 0 ? ' active' : '');
+          dot.setAttribute('aria-label', 'Ballot ' + (i + 1));
+          dot.addEventListener('click', () => {
+            const target = container.children[i];
+            if (target) target.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+          });
+          dotsEl.appendChild(dot);
+        });
+      } else {
+        dotsEl.hidden = true;
+      }
+    }
+    setupCarouselTracking();
     // If a modal is already open for a proposal that still exists, refresh it.
-    if (state.activeProposalId && state.proposals.some(p => p.id === state.activeProposalId)) {
+    if (state.activeProposalId && proposals.some(p => p.id === state.activeProposalId)) {
       const modal = $('#proposal-modal');
       if (modal && !modal.hidden) openProposal(state.activeProposalId);
     }
+  }
+
+  let carouselScrollTimer = null;
+  function setupCarouselTracking() {
+    const container = $('#proposal-banners');
+    const dotsEl = $('#proposal-dots');
+    if (!container || !dotsEl) return;
+    if (container.__riftTracked) return;
+    container.__riftTracked = true;
+    container.addEventListener('scroll', () => {
+      clearTimeout(carouselScrollTimer);
+      carouselScrollTimer = setTimeout(() => {
+        const center = container.scrollLeft + container.clientWidth / 2;
+        const banners = container.children;
+        let closest = 0, minDist = Infinity;
+        for (let i = 0; i < banners.length; i++) {
+          const b = banners[i];
+          const bCenter = b.offsetLeft + b.offsetWidth / 2;
+          const dist = Math.abs(center - bCenter);
+          if (dist < minDist) { minDist = dist; closest = i; }
+        }
+        const dots = dotsEl.children;
+        for (let i = 0; i < dots.length; i++) {
+          dots[i].classList.toggle('active', i === closest);
+        }
+      }, 40);
+    }, { passive: true });
   }
 
   function openProposal(id) {

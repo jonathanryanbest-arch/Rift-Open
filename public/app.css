@@ -426,12 +426,42 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   100% { background: transparent; }
 }
 
-.proposal-banners { display: flex; flex-direction: column; gap: 10px; margin: 0 0 22px; }
+.proposal-carousel-wrap { margin: 0 0 22px; }
+.proposal-carousel-wrap:has(#proposal-banners:empty) { display: none; }
+.proposal-banners {
+  display: flex; gap: 12px;
+  overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 0;
+  margin: 0 -4px; padding-left: 4px; padding-right: 4px;
+  scrollbar-width: none;
+}
+.proposal-banners::-webkit-scrollbar { display: none; }
 .proposal-banners:empty { display: none; }
+.proposal-dots {
+  display: flex; gap: 6px; justify-content: center;
+  margin-top: 10px;
+}
+.proposal-dots[hidden] { display: none; }
+.proposal-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.18); border: 0; padding: 0;
+  cursor: pointer;
+  transition: background 0.25s ease, width 0.25s ease;
+}
+.proposal-dot.active {
+  background: var(--accent);
+  width: 22px; border-radius: 999px;
+}
 .proposal-banner[hidden] { display: none; }
 .proposal-banner {
   display: flex; align-items: center; gap: 14px;
-  width: 100%; margin: 0;
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  margin: 0;
   padding: 14px 18px; border-radius: 14px;
   background: linear-gradient(100deg, #2a1c0a 0%, #3d280c 50%, #2a1c0a 100%);
   border: 1px solid rgba(231,193,107,0.35);

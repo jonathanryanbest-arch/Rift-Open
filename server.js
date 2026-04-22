@@ -217,6 +217,39 @@ const PROPOSALS = [
     noLabel: 'hands off, no',
     yesBlurb: '',
     noBlurb: ''
+  },
+  {
+    id: 'hoag-dan-reds',
+    kicker: 'OFFICIAL RULING',
+    emoji: '♀️',
+    title: "Should we move Hoag and Dan up to the women's tees?",
+    subtitle: 'Motion for mercy. Year V tournament ballot.',
+    yesLabel: 'give them a chance, yes',
+    noLabel: 'let them suffer, no',
+    yesBlurb: '',
+    noBlurb: ''
+  },
+  {
+    id: 'pickle-bong-hole-1',
+    kicker: 'OFFICIAL RULING',
+    emoji: '🍺',
+    title: 'Should Pickle hit a beer bong on the first hole?',
+    subtitle: 'Ceremonial opening motion. Year V tournament ballot.',
+    yesLabel: 'set the tone, yes',
+    noLabel: 'save him, no',
+    yesBlurb: '',
+    noBlurb: ''
+  },
+  {
+    id: 'reese-back-nine',
+    kicker: 'OFFICIAL RULING',
+    emoji: '🍄',
+    title: 'Should Reese trip balls on the back 9?',
+    subtitle: 'Motion for enhanced focus. Year V tournament ballot.',
+    yesLabel: 'let him cook, yes',
+    noLabel: 'keep him sober, no',
+    yesBlurb: '',
+    noBlurb: ''
   }
 ];
 
