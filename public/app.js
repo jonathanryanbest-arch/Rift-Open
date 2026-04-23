@@ -32,6 +32,7 @@
     bracketDraft: null,
     bracketEditing: false,
     bracketSort: (() => { try { return localStorage.getItem('rift_bracket_sort') || 'net'; } catch { return 'net'; } })(),
+    prevRank: (() => { try { return JSON.parse(localStorage.getItem('rift_prev_rank') || 'null'); } catch { return null; } })(),
     userId: null,
     picks: {},
     parlay: [],
@@ -171,7 +172,17 @@
     function applyFullState(data, opts) {
       // On a boundary reset, votes and personal picks were wiped server-side.
       // Clear local picks so the up/down button highlights match reality.
-      if (opts && opts.celebrate) state.picks = {};
+      if (opts && opts.celebrate) {
+        state.picks = {};
+        // Snapshot the OLD consensus rank before overwriting so the
+        // leaderboard can show movement arrows this window.
+        if (state.consensus && Array.isArray(state.consensus.rank) && state.consensus.rank.length === PLAYERS.length) {
+          const snap = {};
+          state.consensus.rank.forEach((p, i) => { snap[p] = i + 1; });
+          state.prevRank = snap;
+          try { localStorage.setItem('rift_prev_rank', JSON.stringify(snap)); } catch {}
+        }
+      }
       state.boards = data.boards;
       state.tallies = data.tallies || {};
       state.oddsHistory = data.oddsHistory || {};
@@ -1274,6 +1285,16 @@
     return hrs + 'h ago';
   }
 
+  function enterBracketEdit() {
+    if (state.bracketEditing) return;
+    state.bracketEditing = true;
+    state.bracketDraft = hydrateBracketDraft();
+    renderLeaderboard();
+    // Scroll the section into view so the user can see the steppers
+    const section = $('#leaderboard');
+    if (section && section.scrollIntoView) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function renderLeaderboard() {
     const section = $('#leaderboard');
     if (!section) return;
@@ -1309,11 +1330,14 @@
     }
 
     if (!c) {
-      if (subEl) subEl.textContent = 'No brackets yet — submit yours to seed the crowd';
+      if (subEl) subEl.textContent = 'Tap any row to submit your bracket';
       if (metaEl) metaEl.textContent = '';
-      // Render 10 placeholder rows to give the section weight
+      // Render 10 placeholder rows — each row enters edit mode on tap
       PLAYERS.forEach((player, i) => {
-        const row = ce('div', { class: 'leaderboard-row' },
+        const row = ce('button', {
+          class: 'leaderboard-row tappable', type: 'button',
+          onclick: () => enterBracketEdit()
+        },
           ce('div', { class: 'leaderboard-rank' }, String(i + 1)),
           ce('div', { class: 'leaderboard-player' }, player),
           ce('div', { class: 'leaderboard-stat empty' }, ce('span', { class: 'leaderboard-stat-label' }, 'NET'), '—'),
@@ -1339,13 +1363,35 @@
       }
     });
 
+    // Movement arrows only make sense for the canonical NET ranking.
+    const showMovement = sortMode === 'net' && state.prevRank && Object.keys(state.prevRank).length > 0;
+
     ranked.forEach((player, i) => {
+      const currentRank = i + 1;
       const fmt = n => (Number.isFinite(n) ? n.toFixed(1) : '—');
       const netCls = 'leaderboard-stat' + (sortMode === 'net' ? ' primary' : '');
       const scoreCls = 'leaderboard-stat' + (sortMode === 'score' ? ' primary' : '');
       const beersCls = 'leaderboard-stat' + (sortMode === 'beers' ? ' primary' : '');
-      const row = ce('div', { class: 'leaderboard-row' },
-        ce('div', { class: 'leaderboard-rank' }, String(i + 1)),
+
+      // Rank cell — optionally decorated with a movement indicator
+      const rankKids = [document.createTextNode(String(currentRank))];
+      if (showMovement) {
+        const prev = state.prevRank[player];
+        if (Number.isInteger(prev)) {
+          const delta = prev - currentRank; // positive = moved up, negative = moved down
+          if (delta > 0) {
+            rankKids.push(ce('span', { class: 'leaderboard-move up', title: `Moved up ${delta}` }, '↑' + delta));
+          } else if (delta < 0) {
+            rankKids.push(ce('span', { class: 'leaderboard-move down', title: `Moved down ${-delta}` }, '↓' + (-delta)));
+          }
+        }
+      }
+
+      const row = ce('button', {
+        class: 'leaderboard-row tappable', type: 'button',
+        onclick: () => enterBracketEdit()
+      },
+        ce('div', { class: 'leaderboard-rank' }, ...rankKids),
         ce('div', { class: 'leaderboard-player' }, player),
         ce('div', { class: netCls }, ce('span', { class: 'leaderboard-stat-label' }, 'NET'), fmt(c.averageNet[player])),
         ce('div', { class: scoreCls }, ce('span', { class: 'leaderboard-stat-label' }, 'SCORE'), fmt(c.averageScore[player])),
@@ -1679,12 +1725,7 @@
 
     // Leaderboard controls
     $('#leaderboard-edit')?.addEventListener('click', async () => {
-      if (!state.bracketEditing) {
-        state.bracketEditing = true;
-        state.bracketDraft = hydrateBracketDraft();
-        renderLeaderboard();
-        return;
-      }
+      if (!state.bracketEditing) { enterBracketEdit(); return; }
       // Currently editing — save + exit
       const ok = await submitBracket();
       if (ok) {

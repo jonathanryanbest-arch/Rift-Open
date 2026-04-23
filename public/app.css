@@ -333,18 +333,35 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 .leaderboard-rows { display: flex; flex-direction: column; }
 .leaderboard-row {
   display: grid;
-  grid-template-columns: 28px 1fr auto auto auto;
+  grid-template-columns: 54px 1fr auto auto auto;
   column-gap: 10px; align-items: center;
   padding: 10px 2px;
   border-bottom: 1px solid rgba(255,255,255,0.05);
+  background: transparent; color: inherit; border-left: 0; border-right: 0; border-top: 0;
+  font: inherit; text-align: left; width: 100%;
 }
 .leaderboard-row:last-child { border-bottom: 0; }
+button.leaderboard-row { cursor: pointer; }
+button.leaderboard-row:hover { background: rgba(231,193,107,0.04); }
+button.leaderboard-row:active { background: rgba(231,193,107,0.08); }
+button.leaderboard-row:focus-visible { outline: 2px solid rgba(231,193,107,0.5); outline-offset: -2px; border-radius: 6px; }
 .leaderboard-rank {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 16px; color: var(--muted);
-  text-align: center;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding-left: 6px;
+}
+.leaderboard-move {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px; font-weight: 800;
+  padding: 1px 5px; border-radius: 4px;
+  letter-spacing: 0.5px;
   font-variant-numeric: tabular-nums;
 }
+.leaderboard-move.up { color: #1a2a12; background: rgba(108, 220, 133, 0.9); }
+.leaderboard-move.down { color: #2a0a0a; background: rgba(248, 113, 113, 0.85); }
 .leaderboard-player {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 20px; letter-spacing: 1.4px; color: var(--text);
@@ -399,11 +416,12 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 
 /* Edit mode */
 .leaderboard-rows.editing .leaderboard-row {
-  grid-template-columns: 20px 1fr auto auto auto;
+  grid-template-columns: 26px 1fr auto auto auto;
   padding: 14px 2px;
   row-gap: 6px;
+  cursor: default;
 }
-.leaderboard-rows.editing .leaderboard-rank { font-size: 14px; }
+.leaderboard-rows.editing .leaderboard-rank { font-size: 14px; padding-left: 0; }
 .leaderboard-rows.editing .leaderboard-player { font-size: 18px; }
 .stepper {
   display: inline-flex; align-items: center; gap: 4px;
@@ -455,7 +473,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 @media (max-width: 720px) {
   .leaderboard { padding: 18px 14px 16px; border-radius: 14px; }
   .leaderboard-title { font-size: 24px; }
-  .leaderboard-row { column-gap: 6px; grid-template-columns: 22px 1fr auto auto auto; }
+  .leaderboard-row { column-gap: 6px; grid-template-columns: 48px 1fr auto auto auto; }
   .leaderboard-player { font-size: 18px; }
   .leaderboard-stat { font-size: 13px; min-width: 36px; padding: 3px 5px; }
   .leaderboard-stat-label { font-size: 7px; }
@@ -463,9 +481,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
   .leaderboard-actions { flex-direction: column; gap: 8px; }
   .leaderboard-edit, .leaderboard-share { width: 100%; min-width: 0; padding: 14px 16px; font-size: 14px; }
   .leaderboard-rows.editing .leaderboard-row {
-    grid-template-columns: 20px 1fr auto auto auto;
+    grid-template-columns: 22px 1fr auto auto auto;
     column-gap: 4px;
   }
+  .leaderboard-move { font-size: 9px; padding: 1px 3px; }
   .stepper button { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
   .stepper-value { font-size: 16px; min-width: 28px; }
   .leaderboard-net { font-size: 16px; min-width: 34px; }
