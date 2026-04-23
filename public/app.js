@@ -1662,6 +1662,9 @@
   }
 
   window.addEventListener('error', (e) => {
+    // Skip third-party noise (Snapchat in-app browser bridge, etc.)
+    if (!e.filename || e.filename.indexOf(location.origin) !== 0) return;
+    if (e.message && /SCDynimacBridge|webkitMessageHandlers|__firefox__|ResizeObserver loop/i.test(e.message)) return;
     console.error('window error', e.error || e.message);
     if (!state.boards || state.boards.length === 0) showFatalRetry('Script error');
   });

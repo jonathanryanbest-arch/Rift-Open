@@ -27,11 +27,23 @@
       } catch (e) {}
     };
     window.addEventListener('error', function (ev) {
+      // Ignore errors thrown by injected scripts from in-app browsers
+      // (Snapchat's SCDynimacBridge, iOS webview shims, browser extensions).
+      // These have no filename or a filename outside our origin.
+      try {
+        if (!ev.filename || ev.filename.indexOf(location.origin) !== 0) return;
+        if (ev.message && /SCDynimacBridge|webkitMessageHandlers|__firefox__|ResizeObserver loop/i.test(ev.message)) return;
+      } catch (_) {}
       var msg = 'JS ERROR: ' + (ev.message || 'unknown');
       if (ev.filename) msg += ' @ ' + ev.filename.split('/').pop() + ':' + (ev.lineno || '?');
       window.__riftStatus(msg, 'err');
     });
     window.addEventListener('unhandledrejection', function (ev) {
+      try {
+        var r = ev.reason || {};
+        var s = (r.message || (typeof r === 'string' ? r : '') || '') + '';
+        if (/SCDynimacBridge|webkitMessageHandlers|__firefox__/i.test(s)) return;
+      } catch (_) {}
       window.__riftStatus('PROMISE REJECTED: ' + (ev.reason && (ev.reason.message || ev.reason) || 'unknown'), 'err');
     });
     window.addEventListener('load', function () {
