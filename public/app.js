@@ -844,47 +844,92 @@
     const legsBottom = H - 140;
     const legH = Math.floor((legsBottom - legsTop) / ranked.length);
 
+    const NUM_FONT = "800 60px 'Bebas Neue', Arial, sans-serif";
+    const NET_FONT = "800 68px 'Bebas Neue', Arial, sans-serif";
+    const OP_FONT  = "600 38px 'Inter', Arial, sans-serif";
+    const LABEL_FONT = "800 13px 'Inter', Arial, sans-serif";
+
     ranked.forEach((player, i) => {
       const y = legsTop + i * legH;
       const net = pred.scores[player] - pred.beers[player];
       const isYou = state.whoami && state.whoami === player;
+      const numY = y + Math.floor(legH * 0.52);
+      const labelY = numY + 26;
 
-      // Rank
+      // Rank (left)
       ctx.fillStyle = i === 0 ? '#e7c16b' : '#9a958b';
       ctx.font = i === 0 ? "800 32px 'Inter', Arial, sans-serif" : "700 28px 'Inter', Arial, sans-serif";
       ctx.textAlign = 'left';
-      ctx.fillText(String(i + 1), padX, y + Math.floor(legH * 0.60));
+      ctx.fillText(String(i + 1), padX, numY);
 
-      // Player
+      // Player (left)
       ctx.fillStyle = i === 0 ? '#fff6dd' : '#f4efe6';
-      ctx.font = `700 ${Math.min(58, Math.floor(legH * 0.58))}px 'Bebas Neue', Arial, sans-serif`;
-      ctx.fillText(player, padX + 60, y + Math.floor(legH * 0.60));
+      ctx.font = `700 ${Math.min(50, Math.floor(legH * 0.48))}px 'Bebas Neue', Arial, sans-serif`;
+      ctx.fillText(player, padX + 60, numY);
 
       // "YOU" chip next to the player's own row
       if (isYou) {
         const playerWidth = ctx.measureText(player).width;
-        const chipX = padX + 60 + playerWidth + 18;
-        const chipY = y + Math.floor(legH * 0.60) - 32;
-        const chipW = 74, chipH = 34;
+        const chipX = padX + 60 + playerWidth + 16;
+        const chipY = numY - 30;
+        const chipW = 64, chipH = 30;
         ctx.fillStyle = '#e7c16b';
-        roundRectPath(ctx, chipX, chipY, chipW, chipH, 8);
+        roundRectPath(ctx, chipX, chipY, chipW, chipH, 6);
         ctx.fill();
         ctx.fillStyle = '#1a130a';
-        ctx.font = "800 20px 'Inter', Arial, sans-serif";
+        ctx.font = "800 17px 'Inter', Arial, sans-serif";
         ctx.textAlign = 'center';
-        ctx.fillText('YOU', chipX + chipW / 2, chipY + 24);
-        ctx.textAlign = 'left';
+        ctx.fillText('YOU', chipX + chipW / 2, chipY + 21);
       }
 
-      // Net (big gold), score + beers (small gray) right-aligned stacked
+      // Math cluster on the right: SCORE \u2212 BEERS = NET
+      // Laid out right-to-left so the NET number anchors to the right edge.
+      let cursor = W - padX;
+      const gap = 14;
+
+      // NET (rightmost, biggest, gold)
       ctx.textAlign = 'right';
       ctx.fillStyle = '#e7c16b';
-      ctx.font = `700 ${Math.min(56, Math.floor(legH * 0.54))}px 'Bebas Neue', Arial, sans-serif`;
-      ctx.fillText(String(net), W - padX, y + Math.floor(legH * 0.52));
+      ctx.font = NET_FONT;
+      ctx.fillText(String(net), cursor, numY);
+      const netW = ctx.measureText(String(net)).width;
+      ctx.fillStyle = 'rgba(231,193,107,0.75)';
+      ctx.font = LABEL_FONT;
+      ctx.fillText('NET', cursor, labelY);
+      cursor -= netW + gap;
 
+      // "="
+      ctx.fillStyle = '#6d675d';
+      ctx.font = OP_FONT;
+      ctx.fillText('=', cursor, numY - 4);
+      const eqW = ctx.measureText('=').width;
+      cursor -= eqW + gap;
+
+      // BEERS
+      ctx.fillStyle = '#d4c188';
+      ctx.font = NUM_FONT;
+      ctx.fillText(String(pred.beers[player]), cursor, numY);
+      const beersW = ctx.measureText(String(pred.beers[player])).width;
       ctx.fillStyle = '#9a958b';
-      ctx.font = "500 20px 'Inter', Arial, sans-serif";
-      ctx.fillText(`${pred.scores[player]} gross \u00b7 ${pred.beers[player]} beer${pred.beers[player] === 1 ? '' : 's'}`, W - padX, y + Math.floor(legH * 0.52) + 28);
+      ctx.font = LABEL_FONT;
+      ctx.fillText('BEERS', cursor, labelY);
+      cursor -= beersW + gap;
+
+      // "\u2212"
+      ctx.fillStyle = '#6d675d';
+      ctx.font = OP_FONT;
+      ctx.fillText('\u2212', cursor, numY - 4);
+      const minusW = ctx.measureText('\u2212').width;
+      cursor -= minusW + gap;
+
+      // SCORE (gross)
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = NUM_FONT;
+      ctx.fillText(String(pred.scores[player]), cursor, numY);
+      const scoreW = ctx.measureText(String(pred.scores[player])).width;
+      ctx.fillStyle = '#9a958b';
+      ctx.font = LABEL_FONT;
+      ctx.fillText('SCORE', cursor, labelY);
 
       // Divider
       if (i < ranked.length - 1) {
