@@ -33,6 +33,7 @@
     bracketEditing: false,
     bracketSort: (() => { try { return localStorage.getItem('rift_bracket_sort') || 'net'; } catch { return 'net'; } })(),
     prevRank: (() => { try { return JSON.parse(localStorage.getItem('rift_prev_rank') || 'null'); } catch { return null; } })(),
+    whoami: (() => { try { return localStorage.getItem('rift_whoami') || ''; } catch { return ''; } })(),
     userId: null,
     picks: {},
     parlay: [],
@@ -806,12 +807,15 @@
     ctx.fillText('RO', W / 2, markY + 66);
 
     // Title
+    const who = whoamiPretty();
+    const kickerName = state.whoami && state.whoami !== 'RAILBIRD' ? who.toUpperCase() + "'S BRACKET" : 'MY BRACKET';
+    const headline = state.whoami && state.whoami !== 'RAILBIRD' ? `HERE'S HOW ${who.toUpperCase()} SEES IT` : "HERE'S HOW I SEE IT";
     ctx.fillStyle = '#fff6dd';
     ctx.font = "800 110px 'Bebas Neue', Arial, sans-serif";
     ctx.fillText('THE RIFT OPEN', W / 2, 340);
     ctx.fillStyle = '#9a958b';
     ctx.font = "600 28px 'Inter', Arial, sans-serif";
-    ctx.fillText('YEAR V \u00b7 MY BRACKET', W / 2, 385);
+    ctx.fillText('YEAR V \u00b7 ' + kickerName, W / 2, 385);
 
     // Divider + section header
     ctx.strokeStyle = 'rgba(231,193,107,0.35)';
@@ -822,7 +826,7 @@
 
     ctx.fillStyle = '#e7c16b';
     ctx.font = "800 44px 'Bebas Neue', Arial, sans-serif";
-    ctx.fillText("HERE'S HOW I SEE IT", W / 2, 490);
+    ctx.fillText(headline, W / 2, 490);
     ctx.fillStyle = '#9a958b';
     ctx.font = "600 22px 'Inter', Arial, sans-serif";
     ctx.fillText('FADE ME IF YOU DARE \u00b7 1 BEER = \u22121 STROKE', W / 2, 525);
@@ -843,6 +847,7 @@
     ranked.forEach((player, i) => {
       const y = legsTop + i * legH;
       const net = pred.scores[player] - pred.beers[player];
+      const isYou = state.whoami && state.whoami === player;
 
       // Rank
       ctx.fillStyle = i === 0 ? '#e7c16b' : '#9a958b';
@@ -854,6 +859,22 @@
       ctx.fillStyle = i === 0 ? '#fff6dd' : '#f4efe6';
       ctx.font = `700 ${Math.min(58, Math.floor(legH * 0.58))}px 'Bebas Neue', Arial, sans-serif`;
       ctx.fillText(player, padX + 60, y + Math.floor(legH * 0.60));
+
+      // "YOU" chip next to the player's own row
+      if (isYou) {
+        const playerWidth = ctx.measureText(player).width;
+        const chipX = padX + 60 + playerWidth + 18;
+        const chipY = y + Math.floor(legH * 0.60) - 32;
+        const chipW = 74, chipH = 34;
+        ctx.fillStyle = '#e7c16b';
+        roundRectPath(ctx, chipX, chipY, chipW, chipH, 8);
+        ctx.fill();
+        ctx.fillStyle = '#1a130a';
+        ctx.font = "800 20px 'Inter', Arial, sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText('YOU', chipX + chipW / 2, chipY + 24);
+        ctx.textAlign = 'left';
+      }
 
       // Net (big gold), score + beers (small gray) right-aligned stacked
       ctx.textAlign = 'right';
@@ -892,14 +913,16 @@
     try {
       const blob = await renderBracketCanvas();
       if (!blob) throw new Error('no blob');
-      const file = new File([blob], 'rift-open-my-bracket.png', { type: 'image/png' });
+      const who = whoamiPretty();
+      const namePart = (state.whoami && state.whoami !== 'RAILBIRD') ? who.toLowerCase() + '-' : 'my-';
+      const file = new File([blob], `rift-open-${namePart}bracket.png`, { type: 'image/png' });
+      const title = (state.whoami && state.whoami !== 'RAILBIRD') ? `${who}'s Rift Open Bracket` : 'My Rift Open Bracket';
+      const text = (state.whoami && state.whoami !== 'RAILBIRD')
+        ? `Here's ${who}'s Rift Open bracket. Fade me.`
+        : "Here's my Rift Open bracket. Fade me.";
       if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
         try {
-          await navigator.share({
-            files: [file],
-            title: 'My Rift Open Bracket',
-            text: "Here's my Rift Open bracket. Fade me."
-          });
+          await navigator.share({ files: [file], title, text });
           return;
         } catch (e) {
           if (e && e.name === 'AbortError') return;
@@ -908,7 +931,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'rift-open-my-bracket.png';
+      a.download = `rift-open-${namePart}bracket.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1229,6 +1252,15 @@
     return hrs + 'h ago';
   }
 
+  function whoamiPretty() {
+    const map = {
+      MURPH: 'Murph', MAX: 'Max', MANGO: 'Mango', PATTY: 'Patty', HIPPIE: 'Hippie',
+      PICKLE: 'Pickle', RYAN: 'Ryan', PARKER: 'Parker', DAN: 'Dan', HOAG: 'Hoag',
+      REESE: 'Reese', RAILBIRD: 'Rail bird'
+    };
+    return map[state.whoami] || '';
+  }
+
   function enterBracketEdit() {
     if (state.bracketEditing) return;
     state.bracketEditing = true;
@@ -1331,12 +1363,15 @@
         }
       }
 
+      const isYou = state.whoami && state.whoami === player;
+      const playerKids = [document.createTextNode(player)];
+      if (isYou) playerKids.push(ce('span', { class: 'leaderboard-you' }, 'YOU'));
       const row = ce('button', {
-        class: 'leaderboard-row tappable', type: 'button',
+        class: 'leaderboard-row tappable' + (isYou ? ' is-you' : ''), type: 'button',
         onclick: () => enterBracketEdit()
       },
         ce('div', { class: 'leaderboard-rank' }, ...rankKids),
-        ce('div', { class: 'leaderboard-player' }, player),
+        ce('div', { class: 'leaderboard-player' }, ...playerKids),
         ce('div', { class: netCls }, ce('span', { class: 'leaderboard-stat-label' }, 'NET'), fmt(c.averageNet[player])),
         ce('div', { class: scoreCls }, ce('span', { class: 'leaderboard-stat-label' }, 'SCORE'), fmt(c.averageScore[player])),
         ce('div', { class: beersCls }, ce('span', { class: 'leaderboard-stat-label' }, 'BEERS'), fmt(c.averageBeers[player]))
@@ -1669,6 +1704,15 @@
       try { localStorage.setItem('rift_bracket_sort', state.bracketSort); } catch {}
       renderLeaderboard();
     });
+    const whoamiEl = $('#leaderboard-whoami');
+    if (whoamiEl) {
+      whoamiEl.value = state.whoami || '';
+      whoamiEl.addEventListener('change', () => {
+        state.whoami = whoamiEl.value;
+        try { localStorage.setItem('rift_whoami', state.whoami); } catch {}
+        renderLeaderboard();
+      });
+    }
 
     // When the tab becomes visible again after being backgrounded on mobile,
     // SSE may be dead. Refresh state and reconnect.
