@@ -767,8 +767,8 @@
 
   async function renderBracketCanvas() {
     try { await document.fonts.ready; } catch {}
-    const c = state.consensus;
-    if (!c) return null;
+    const pred = state.prediction;
+    if (!pred || !pred.scores || !pred.beers) return null;
 
     const W = 1080, H = 1920;
     const canvas = document.createElement('canvas');
@@ -811,7 +811,7 @@
     ctx.fillText('THE RIFT OPEN', W / 2, 340);
     ctx.fillStyle = '#9a958b';
     ctx.font = "600 28px 'Inter', Arial, sans-serif";
-    ctx.fillText('YEAR V \u00b7 PROJECTED FINISH', W / 2, 385);
+    ctx.fillText('YEAR V \u00b7 MY BRACKET', W / 2, 385);
 
     // Divider + section header
     ctx.strokeStyle = 'rgba(231,193,107,0.35)';
@@ -820,59 +820,50 @@
     ctx.moveTo(W / 2 - 60, 430); ctx.lineTo(W / 2 + 60, 430);
     ctx.stroke();
 
-    const sortMode = state.bracketSort || 'net';
-    const sortLabel = sortMode === 'score' ? 'SCORE' : sortMode === 'beers' ? 'BEERS' : 'NET';
     ctx.fillStyle = '#e7c16b';
-    ctx.font = "800 36px 'Bebas Neue', Arial, sans-serif";
-    ctx.fillText('CROWD LEADERBOARD', W / 2, 485);
+    ctx.font = "800 44px 'Bebas Neue', Arial, sans-serif";
+    ctx.fillText("HERE'S HOW I SEE IT", W / 2, 490);
     ctx.fillStyle = '#9a958b';
     ctx.font = "600 22px 'Inter', Arial, sans-serif";
-    ctx.fillText(`SORTED BY ${sortLabel} \u00b7 ${c.submissionCount} BRACKET${c.submissionCount === 1 ? '' : 'S'}`, W / 2, 520);
+    ctx.fillText('FADE ME IF YOU DARE \u00b7 1 BEER = \u22121 STROKE', W / 2, 525);
 
-    // Rank rows
+    // Rank rows \u2014 user's own bracket, sorted by THEIR net asc
     const ranked = [...PLAYERS].sort((a, b) => {
-      if (sortMode === 'score') {
-        const d = c.averageScore[a] - c.averageScore[b];
-        return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
-      } else if (sortMode === 'beers') {
-        const d = c.averageBeers[b] - c.averageBeers[a];
-        return Math.abs(d) > 1e-9 ? d : (c.averageNet[a] - c.averageNet[b]);
-      }
-      const d = c.averageNet[a] - c.averageNet[b];
-      return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
+      const na = pred.scores[a] - pred.beers[a];
+      const nb = pred.scores[b] - pred.beers[b];
+      if (na !== nb) return na - nb;
+      return pred.beers[a] - pred.beers[b];
     });
 
     const padX = 80;
-    const hasOwn = state.prediction && state.prediction.scores;
-    const legsTop = 570;
-    const legsBottom = hasOwn ? H - 520 : H - 140;
+    const legsTop = 580;
+    const legsBottom = H - 140;
     const legH = Math.floor((legsBottom - legsTop) / ranked.length);
 
     ranked.forEach((player, i) => {
       const y = legsTop + i * legH;
+      const net = pred.scores[player] - pred.beers[player];
 
       // Rank
-      ctx.fillStyle = '#9a958b';
-      ctx.font = "700 26px 'Inter', Arial, sans-serif";
+      ctx.fillStyle = i === 0 ? '#e7c16b' : '#9a958b';
+      ctx.font = i === 0 ? "800 32px 'Inter', Arial, sans-serif" : "700 28px 'Inter', Arial, sans-serif";
       ctx.textAlign = 'left';
       ctx.fillText(String(i + 1), padX, y + Math.floor(legH * 0.60));
 
       // Player
-      ctx.fillStyle = '#f4efe6';
-      ctx.font = `700 ${Math.min(56, Math.floor(legH * 0.55))}px 'Bebas Neue', Arial, sans-serif`;
-      ctx.fillText(player, padX + 50, y + Math.floor(legH * 0.60));
+      ctx.fillStyle = i === 0 ? '#fff6dd' : '#f4efe6';
+      ctx.font = `700 ${Math.min(58, Math.floor(legH * 0.58))}px 'Bebas Neue', Arial, sans-serif`;
+      ctx.fillText(player, padX + 60, y + Math.floor(legH * 0.60));
 
-      // Net (gold), Score, Beers (right-aligned stacked)
-      const fmt = n => (Number.isFinite(n) ? n.toFixed(1) : '\u2014');
+      // Net (big gold), score + beers (small gray) right-aligned stacked
       ctx.textAlign = 'right';
       ctx.fillStyle = '#e7c16b';
-      ctx.font = `700 ${Math.min(52, Math.floor(legH * 0.50))}px 'Bebas Neue', Arial, sans-serif`;
-      ctx.fillText(fmt(c.averageNet[player]), W - padX, y + Math.floor(legH * 0.52));
+      ctx.font = `700 ${Math.min(56, Math.floor(legH * 0.54))}px 'Bebas Neue', Arial, sans-serif`;
+      ctx.fillText(String(net), W - padX, y + Math.floor(legH * 0.52));
 
       ctx.fillStyle = '#9a958b';
-      ctx.font = "500 18px 'Inter', Arial, sans-serif";
-      const meta = `${fmt(c.averageScore[player])} gross \u00b7 ${fmt(c.averageBeers[player])} beers`;
-      ctx.fillText(meta, W - padX, y + Math.floor(legH * 0.52) + 26);
+      ctx.font = "500 20px 'Inter', Arial, sans-serif";
+      ctx.fillText(`${pred.scores[player]} gross \u00b7 ${pred.beers[player]} beer${pred.beers[player] === 1 ? '' : 's'}`, W - padX, y + Math.floor(legH * 0.52) + 28);
 
       // Divider
       if (i < ranked.length - 1) {
@@ -884,53 +875,6 @@
       }
     });
 
-    // "Your bracket" mini panel at bottom if user submitted
-    if (hasOwn) {
-      const boxY = H - 480;
-      const boxW = W - padX * 2, boxH = 340;
-      const boxGrad = ctx.createLinearGradient(0, boxY, 0, boxY + boxH);
-      boxGrad.addColorStop(0, 'rgba(231,193,107,0.14)');
-      boxGrad.addColorStop(1, 'rgba(231,193,107,0.04)');
-      ctx.fillStyle = boxGrad;
-      roundRectPath(ctx, padX, boxY, boxW, boxH, 28);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(231,193,107,0.35)';
-      ctx.lineWidth = 2;
-      roundRectPath(ctx, padX, boxY, boxW, boxH, 28);
-      ctx.stroke();
-
-      ctx.fillStyle = '#e7c16b';
-      ctx.font = "800 22px 'Inter', Arial, sans-serif";
-      ctx.textAlign = 'center';
-      ctx.fillText('MY BRACKET \u00b7 TOP 3', W / 2, boxY + 48);
-
-      // Derive user's top 3 by their own net
-      const myRanked = [...PLAYERS].sort((a, b) => {
-        return (state.prediction.scores[a] - state.prediction.beers[a]) - (state.prediction.scores[b] - state.prediction.beers[b]);
-      });
-
-      ctx.textAlign = 'left';
-      for (let i = 0; i < 3; i++) {
-        const player = myRanked[i];
-        const myNet = state.prediction.scores[player] - state.prediction.beers[player];
-        const rowY = boxY + 100 + i * 72;
-
-        ctx.fillStyle = '#9a958b';
-        ctx.font = "700 30px 'Inter', Arial, sans-serif";
-        ctx.fillText(String(i + 1), padX + 40, rowY + 34);
-
-        ctx.fillStyle = '#fff6dd';
-        ctx.font = "700 42px 'Bebas Neue', Arial, sans-serif";
-        ctx.fillText(player, padX + 90, rowY + 40);
-
-        ctx.textAlign = 'right';
-        ctx.fillStyle = '#e7c16b';
-        ctx.font = "700 44px 'Bebas Neue', Arial, sans-serif";
-        ctx.fillText(String(myNet), W - padX - 40, rowY + 40);
-        ctx.textAlign = 'left';
-      }
-    }
-
     // URL footer
     ctx.fillStyle = '#6d675d';
     ctx.font = "600 24px 'Inter', Arial, sans-serif";
@@ -941,20 +885,20 @@
   }
 
   async function shareBracketCard() {
-    if (!state.consensus) { toast('No consensus yet \u2014 submit a bracket first'); return; }
+    if (!state.prediction) { toast('Submit your bracket first'); return; }
     const btn = document.getElementById('leaderboard-share');
     const originalText = btn && btn.textContent;
     if (btn) { btn.disabled = true; btn.textContent = 'Generating\u2026'; }
     try {
       const blob = await renderBracketCanvas();
       if (!blob) throw new Error('no blob');
-      const file = new File([blob], 'rift-open-bracket.png', { type: 'image/png' });
+      const file = new File([blob], 'rift-open-my-bracket.png', { type: 'image/png' });
       if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
         try {
           await navigator.share({
             files: [file],
-            title: 'Rift Open Projected Finish',
-            text: "My Rift Open bracket \u2014 who's winning this thing?"
+            title: 'My Rift Open Bracket',
+            text: "Here's my Rift Open bracket. Fade me."
           });
           return;
         } catch (e) {
@@ -964,7 +908,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'rift-open-bracket.png';
+      a.download = 'rift-open-my-bracket.png';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1307,7 +1251,7 @@
     } else {
       renderLeaderboardConsensus();
       if (editBtn) editBtn.textContent = state.prediction ? 'Edit my bracket' : 'Submit my bracket';
-      if (shareBtn) shareBtn.hidden = !state.consensus;
+      if (shareBtn) shareBtn.hidden = !state.prediction;
     }
   }
 
