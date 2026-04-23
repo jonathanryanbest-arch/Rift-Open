@@ -9,6 +9,9 @@
   }
 
   const REFRESH_MS = 5 * 60 * 1000;
+  const PLAYERS = ['MURPH', 'MAX', 'MANGO', 'PATTY', 'HIPPIE', 'PICKLE', 'RYAN', 'PARKER', 'DAN', 'HOAG'];
+  const DEFAULT_PAR = 70;
+  const BRACKET_DRAFT_KEY = 'rift_bracket_draft';
 
   function nextRefreshAt() {
     // Align to fixed 5-minute wall-clock boundaries so every viewer sees the
@@ -24,6 +27,11 @@
     proposals: [],
     proposalVotes: {},
     activeProposalId: null,
+    consensus: null,
+    prediction: null,
+    bracketDraft: null,
+    bracketEditing: false,
+    bracketSort: (() => { try { return localStorage.getItem('rift_bracket_sort') || 'net'; } catch { return 'net'; } })(),
     userId: null,
     picks: {},
     parlay: [],
@@ -86,7 +94,9 @@
     localStorage.setItem('rift_uid', data.userId);
     state.picks = data.picks || {};
     state.proposalVotes = data.proposalVotes || {};
+    state.prediction = data.prediction || null;
     renderProposal();
+    renderLeaderboard();
   }
 
   const STATE_CACHE_KEY = 'rift_state_cache_v1';
@@ -128,12 +138,14 @@
     state.tallies = data.tallies || {};
     state.oddsHistory = data.oddsHistory || {};
     state.proposals = data.proposals || [];
+    state.consensus = data.consensus || null;
     if (data.refreshAt) state.refreshAt = data.refreshAt;
     saveStateCache(data);
     snapshotNow();
     diag('loaded ' + data.boards.length + ' boards, rendering\u2026');
     render();
     renderProposal();
+    renderLeaderboard();
     // clear the diag once everything is painted
     setTimeout(function(){ const d = document.getElementById('rift-diag'); if (d) d.remove(); }, 400);
   }
@@ -164,11 +176,13 @@
       state.tallies = data.tallies || {};
       state.oddsHistory = data.oddsHistory || {};
       state.proposals = data.proposals || state.proposals || [];
+      state.consensus = data.consensus || null;
       if (data.refreshAt) state.refreshAt = data.refreshAt;
       snapshotNow();
       saveStateCache(data);
       render();
       renderProposal();
+      renderLeaderboard();
       if (opts && opts.celebrate) celebrateBoundary();
     }
     es.addEventListener('snapshot', (e) => {
@@ -740,6 +754,219 @@
     }
   }
 
+  async function renderBracketCanvas() {
+    try { await document.fonts.ready; } catch {}
+    const c = state.consensus;
+    if (!c) return null;
+
+    const W = 1080, H = 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'alphabetic';
+
+    // Background
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1c1c22');
+    bg.addColorStop(0.5, '#141418');
+    bg.addColorStop(1, '#08080a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const glow = ctx.createRadialGradient(W / 2, H * 0.15, 60, W / 2, H * 0.15, 700);
+    glow.addColorStop(0, 'rgba(231,193,107,0.12)');
+    glow.addColorStop(1, 'rgba(231,193,107,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Top gold bar + RO mark
+    const gold = ctx.createLinearGradient(0, 0, W, 0);
+    gold.addColorStop(0, '#e7c16b'); gold.addColorStop(1, '#b8893f');
+    ctx.fillStyle = gold;
+    ctx.fillRect(0, 0, W, 14);
+
+    const markSize = 96, markX = W / 2 - markSize / 2, markY = 100;
+    ctx.fillStyle = gold;
+    roundRectPath(ctx, markX, markY, markSize, markSize, 22);
+    ctx.fill();
+    ctx.fillStyle = '#1a130a';
+    ctx.font = "900 56px 'Bebas Neue', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('RO', W / 2, markY + 66);
+
+    // Title
+    ctx.fillStyle = '#fff6dd';
+    ctx.font = "800 110px 'Bebas Neue', Arial, sans-serif";
+    ctx.fillText('THE RIFT OPEN', W / 2, 340);
+    ctx.fillStyle = '#9a958b';
+    ctx.font = "600 28px 'Inter', Arial, sans-serif";
+    ctx.fillText('YEAR V \u00b7 PROJECTED FINISH', W / 2, 385);
+
+    // Divider + section header
+    ctx.strokeStyle = 'rgba(231,193,107,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 60, 430); ctx.lineTo(W / 2 + 60, 430);
+    ctx.stroke();
+
+    const sortMode = state.bracketSort || 'net';
+    const sortLabel = sortMode === 'score' ? 'SCORE' : sortMode === 'beers' ? 'BEERS' : 'NET';
+    ctx.fillStyle = '#e7c16b';
+    ctx.font = "800 36px 'Bebas Neue', Arial, sans-serif";
+    ctx.fillText('CROWD LEADERBOARD', W / 2, 485);
+    ctx.fillStyle = '#9a958b';
+    ctx.font = "600 22px 'Inter', Arial, sans-serif";
+    ctx.fillText(`SORTED BY ${sortLabel} \u00b7 ${c.submissionCount} BRACKET${c.submissionCount === 1 ? '' : 'S'}`, W / 2, 520);
+
+    // Rank rows
+    const ranked = [...PLAYERS].sort((a, b) => {
+      if (sortMode === 'score') {
+        const d = c.averageScore[a] - c.averageScore[b];
+        return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
+      } else if (sortMode === 'beers') {
+        const d = c.averageBeers[b] - c.averageBeers[a];
+        return Math.abs(d) > 1e-9 ? d : (c.averageNet[a] - c.averageNet[b]);
+      }
+      const d = c.averageNet[a] - c.averageNet[b];
+      return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
+    });
+
+    const padX = 80;
+    const hasOwn = state.prediction && state.prediction.scores;
+    const legsTop = 570;
+    const legsBottom = hasOwn ? H - 520 : H - 140;
+    const legH = Math.floor((legsBottom - legsTop) / ranked.length);
+
+    ranked.forEach((player, i) => {
+      const y = legsTop + i * legH;
+
+      // Rank
+      ctx.fillStyle = '#9a958b';
+      ctx.font = "700 26px 'Inter', Arial, sans-serif";
+      ctx.textAlign = 'left';
+      ctx.fillText(String(i + 1), padX, y + Math.floor(legH * 0.60));
+
+      // Player
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = `700 ${Math.min(56, Math.floor(legH * 0.55))}px 'Bebas Neue', Arial, sans-serif`;
+      ctx.fillText(player, padX + 50, y + Math.floor(legH * 0.60));
+
+      // Net (gold), Score, Beers (right-aligned stacked)
+      const fmt = n => (Number.isFinite(n) ? n.toFixed(1) : '\u2014');
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#e7c16b';
+      ctx.font = `700 ${Math.min(52, Math.floor(legH * 0.50))}px 'Bebas Neue', Arial, sans-serif`;
+      ctx.fillText(fmt(c.averageNet[player]), W - padX, y + Math.floor(legH * 0.52));
+
+      ctx.fillStyle = '#9a958b';
+      ctx.font = "500 18px 'Inter', Arial, sans-serif";
+      const meta = `${fmt(c.averageScore[player])} gross \u00b7 ${fmt(c.averageBeers[player])} beers`;
+      ctx.fillText(meta, W - padX, y + Math.floor(legH * 0.52) + 26);
+
+      // Divider
+      if (i < ranked.length - 1) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padX, y + legH - 4); ctx.lineTo(W - padX, y + legH - 4);
+        ctx.stroke();
+      }
+    });
+
+    // "Your bracket" mini panel at bottom if user submitted
+    if (hasOwn) {
+      const boxY = H - 480;
+      const boxW = W - padX * 2, boxH = 340;
+      const boxGrad = ctx.createLinearGradient(0, boxY, 0, boxY + boxH);
+      boxGrad.addColorStop(0, 'rgba(231,193,107,0.14)');
+      boxGrad.addColorStop(1, 'rgba(231,193,107,0.04)');
+      ctx.fillStyle = boxGrad;
+      roundRectPath(ctx, padX, boxY, boxW, boxH, 28);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(231,193,107,0.35)';
+      ctx.lineWidth = 2;
+      roundRectPath(ctx, padX, boxY, boxW, boxH, 28);
+      ctx.stroke();
+
+      ctx.fillStyle = '#e7c16b';
+      ctx.font = "800 22px 'Inter', Arial, sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText('MY BRACKET \u00b7 TOP 3', W / 2, boxY + 48);
+
+      // Derive user's top 3 by their own net
+      const myRanked = [...PLAYERS].sort((a, b) => {
+        return (state.prediction.scores[a] - state.prediction.beers[a]) - (state.prediction.scores[b] - state.prediction.beers[b]);
+      });
+
+      ctx.textAlign = 'left';
+      for (let i = 0; i < 3; i++) {
+        const player = myRanked[i];
+        const myNet = state.prediction.scores[player] - state.prediction.beers[player];
+        const rowY = boxY + 100 + i * 72;
+
+        ctx.fillStyle = '#9a958b';
+        ctx.font = "700 30px 'Inter', Arial, sans-serif";
+        ctx.fillText(String(i + 1), padX + 40, rowY + 34);
+
+        ctx.fillStyle = '#fff6dd';
+        ctx.font = "700 42px 'Bebas Neue', Arial, sans-serif";
+        ctx.fillText(player, padX + 90, rowY + 40);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#e7c16b';
+        ctx.font = "700 44px 'Bebas Neue', Arial, sans-serif";
+        ctx.fillText(String(myNet), W - padX - 40, rowY + 40);
+        ctx.textAlign = 'left';
+      }
+    }
+
+    // URL footer
+    ctx.fillStyle = '#6d675d';
+    ctx.font = "600 24px 'Inter', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('rift-open-production.up.railway.app', W / 2, H - 70);
+
+    return new Promise((resolve) => { canvas.toBlob((blob) => resolve(blob), 'image/png', 0.95); });
+  }
+
+  async function shareBracketCard() {
+    if (!state.consensus) { toast('No consensus yet \u2014 submit a bracket first'); return; }
+    const btn = document.getElementById('leaderboard-share');
+    const originalText = btn && btn.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = 'Generating\u2026'; }
+    try {
+      const blob = await renderBracketCanvas();
+      if (!blob) throw new Error('no blob');
+      const file = new File([blob], 'rift-open-bracket.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Rift Open Projected Finish',
+            text: "My Rift Open bracket \u2014 who's winning this thing?"
+          });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'rift-open-bracket.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast('Image saved \u2014 find it in your Photos or Downloads');
+    } catch (e) {
+      console.error('bracket card failed', e);
+      toast("Couldn\u2019t make the image");
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    }
+  }
+
   function hydrateFromHash() {
     const m = location.hash.match(/p=([^&]+)/);
     if (!m) return;
@@ -995,6 +1222,264 @@
     }
   }
 
+  // --- Crowd Leaderboard ---
+
+  function loadBracketDraft() {
+    try {
+      const raw = localStorage.getItem(BRACKET_DRAFT_KEY);
+      if (!raw) return null;
+      const d = JSON.parse(raw);
+      if (!d || !d.scores || !d.beers) return null;
+      return d;
+    } catch { return null; }
+  }
+  function saveBracketDraft(draft) {
+    try { localStorage.setItem(BRACKET_DRAFT_KEY, JSON.stringify(draft)); } catch {}
+  }
+  function clearBracketDraft() {
+    try { localStorage.removeItem(BRACKET_DRAFT_KEY); } catch {}
+  }
+
+  function hydrateBracketDraft() {
+    const draft = loadBracketDraft();
+    if (draft && draft.scores && draft.beers) return draft;
+    if (state.prediction && state.prediction.scores && state.prediction.beers) {
+      return {
+        scores: { ...state.prediction.scores },
+        beers: { ...state.prediction.beers }
+      };
+    }
+    const scores = {}, beers = {};
+    for (const p of PLAYERS) { scores[p] = DEFAULT_PAR; beers[p] = 0; }
+    return { scores, beers };
+  }
+
+  function netOf(p, scores, beers) {
+    return (scores[p] || 0) - (beers[p] || 0);
+  }
+
+  function clampScore(n)  { return Math.max(55, Math.min(140, Math.round(n))); }
+  function clampBeers(n)  { return Math.max(0, Math.min(50, Math.round(n))); }
+
+  function formatMinsAgo(ts) {
+    if (!ts) return '';
+    const diffMs = Date.now() - ts;
+    if (diffMs < 0) return 'just now';
+    const secs = Math.floor(diffMs / 1000);
+    if (secs < 30) return 'just now';
+    if (secs < 60) return secs + 's ago';
+    const mins = Math.floor(secs / 60);
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    return hrs + 'h ago';
+  }
+
+  function renderLeaderboard() {
+    const section = $('#leaderboard');
+    if (!section) return;
+    const editBtn = $('#leaderboard-edit');
+    const shareBtn = $('#leaderboard-share');
+    if (state.bracketEditing) {
+      renderBracketEditor();
+      if (editBtn) editBtn.textContent = 'Save bracket';
+      if (shareBtn) shareBtn.hidden = true;
+    } else {
+      renderLeaderboardConsensus();
+      if (editBtn) editBtn.textContent = state.prediction ? 'Edit my bracket' : 'Submit my bracket';
+      if (shareBtn) shareBtn.hidden = !state.consensus;
+    }
+  }
+
+  function renderLeaderboardConsensus() {
+    const rowsEl = $('#leaderboard-rows');
+    const subEl = $('#leaderboard-sub');
+    const metaEl = $('#leaderboard-meta');
+    const sortEl = $('#leaderboard-sort');
+    if (!rowsEl) return;
+    rowsEl.classList.remove('editing');
+    rowsEl.innerHTML = '';
+    const c = state.consensus;
+
+    // Sort tabs only visible when there's data
+    if (sortEl) sortEl.hidden = !c;
+    if (sortEl) {
+      for (const btn of sortEl.querySelectorAll('button[data-sort]')) {
+        btn.classList.toggle('active', btn.dataset.sort === state.bracketSort);
+      }
+    }
+
+    if (!c) {
+      if (subEl) subEl.textContent = 'No brackets yet — submit yours to seed the crowd';
+      if (metaEl) metaEl.textContent = '';
+      // Render 10 placeholder rows to give the section weight
+      PLAYERS.forEach((player, i) => {
+        const row = ce('div', { class: 'leaderboard-row' },
+          ce('div', { class: 'leaderboard-rank' }, String(i + 1)),
+          ce('div', { class: 'leaderboard-player' }, player),
+          ce('div', { class: 'leaderboard-stat empty' }, ce('span', { class: 'leaderboard-stat-label' }, 'NET'), '—'),
+          ce('div', { class: 'leaderboard-stat empty' }, ce('span', { class: 'leaderboard-stat-label' }, 'SCORE'), '—'),
+          ce('div', { class: 'leaderboard-stat empty' }, ce('span', { class: 'leaderboard-stat-label' }, 'BEERS'), '—')
+        );
+        rowsEl.appendChild(row);
+      });
+      return;
+    }
+
+    const sortMode = state.bracketSort || 'net';
+    const ranked = [...PLAYERS].sort((a, b) => {
+      if (sortMode === 'score') {
+        const d = c.averageScore[a] - c.averageScore[b];
+        return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
+      } else if (sortMode === 'beers') {
+        const d = c.averageBeers[b] - c.averageBeers[a]; // DESC for beers
+        return Math.abs(d) > 1e-9 ? d : (c.averageNet[a] - c.averageNet[b]);
+      } else {
+        const d = c.averageNet[a] - c.averageNet[b];
+        return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
+      }
+    });
+
+    ranked.forEach((player, i) => {
+      const fmt = n => (Number.isFinite(n) ? n.toFixed(1) : '—');
+      const netCls = 'leaderboard-stat' + (sortMode === 'net' ? ' primary' : '');
+      const scoreCls = 'leaderboard-stat' + (sortMode === 'score' ? ' primary' : '');
+      const beersCls = 'leaderboard-stat' + (sortMode === 'beers' ? ' primary' : '');
+      const row = ce('div', { class: 'leaderboard-row' },
+        ce('div', { class: 'leaderboard-rank' }, String(i + 1)),
+        ce('div', { class: 'leaderboard-player' }, player),
+        ce('div', { class: netCls }, ce('span', { class: 'leaderboard-stat-label' }, 'NET'), fmt(c.averageNet[player])),
+        ce('div', { class: scoreCls }, ce('span', { class: 'leaderboard-stat-label' }, 'SCORE'), fmt(c.averageScore[player])),
+        ce('div', { class: beersCls }, ce('span', { class: 'leaderboard-stat-label' }, 'BEERS'), fmt(c.averageBeers[player]))
+      );
+      rowsEl.appendChild(row);
+    });
+
+    if (subEl) subEl.textContent = `${c.submissionCount} BRACKET${c.submissionCount === 1 ? '' : 'S'} SUBMITTED`;
+    if (metaEl) metaEl.textContent = 'Updated ' + formatMinsAgo(c.computedAt) + ' · refreshes every 5 minutes';
+  }
+
+  function renderBracketEditor() {
+    const rowsEl = $('#leaderboard-rows');
+    const subEl = $('#leaderboard-sub');
+    const metaEl = $('#leaderboard-meta');
+    const sortEl = $('#leaderboard-sort');
+    if (!rowsEl) return;
+    if (sortEl) sortEl.hidden = true;
+    rowsEl.classList.add('editing');
+    rowsEl.innerHTML = '';
+
+    if (!state.bracketDraft) state.bracketDraft = hydrateBracketDraft();
+    const draft = state.bracketDraft;
+
+    // Sort rows by net asc in edit mode
+    const ordered = [...PLAYERS].sort((a, b) => {
+      const na = netOf(a, draft.scores, draft.beers);
+      const nb = netOf(b, draft.scores, draft.beers);
+      if (na !== nb) return na - nb;
+      return draft.beers[a] - draft.beers[b];
+    });
+
+    if (subEl) subEl.textContent = 'Par ' + DEFAULT_PAR + ' · 1 beer = −1 stroke · tap save when done';
+    if (metaEl) metaEl.textContent = '';
+
+    ordered.forEach((player, i) => {
+      const row = ce('div', { class: 'leaderboard-row' },
+        ce('div', { class: 'leaderboard-rank' }, String(i + 1)),
+        ce('div', { class: 'leaderboard-player' }, player),
+        buildStepper('SCORE', draft.scores[player], (next) => {
+          draft.scores[player] = clampScore(next);
+          saveBracketDraft(draft);
+          renderBracketEditor();
+        }, 55, 140),
+        buildStepper('BEERS', draft.beers[player], (next) => {
+          draft.beers[player] = clampBeers(next);
+          saveBracketDraft(draft);
+          renderBracketEditor();
+        }, 0, 50),
+        ce('div', { class: 'leaderboard-net', title: 'Net (score minus beers)' }, String(netOf(player, draft.scores, draft.beers)))
+      );
+      rowsEl.appendChild(row);
+    });
+  }
+
+  function buildStepper(label, value, onChange, min, max) {
+    const minusBtn = ce('button', {
+      type: 'button', 'aria-label': label + ' minus',
+      onclick: (e) => { e.preventDefault(); onChange((value || 0) - 1); }
+    }, '−');
+    const plusBtn = ce('button', {
+      type: 'button', 'aria-label': label + ' plus',
+      onclick: (e) => { e.preventDefault(); onChange((value || 0) + 1); }
+    }, '+');
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.inputMode = 'numeric';
+    input.pattern = '[0-9]*';
+    input.min = String(min);
+    input.max = String(max);
+    input.value = String(value);
+    input.className = 'stepper-value';
+    input.addEventListener('change', () => {
+      const parsed = parseInt(input.value, 10);
+      if (Number.isFinite(parsed)) onChange(parsed);
+    });
+    input.addEventListener('blur', () => {
+      const parsed = parseInt(input.value, 10);
+      if (Number.isFinite(parsed)) onChange(parsed);
+      else onChange(value);
+    });
+    // Long-press to auto-increment
+    attachLongPress(minusBtn, () => onChange((value || 0) - 1));
+    attachLongPress(plusBtn, () => onChange((value || 0) + 1));
+    return ce('div', { class: 'stepper-wrap' },
+      ce('div', { class: 'stepper-label' }, label),
+      ce('div', { class: 'stepper' }, minusBtn, input, plusBtn)
+    );
+  }
+
+  function attachLongPress(el, action) {
+    let timer = null, interval = null;
+    const start = () => {
+      timer = setTimeout(() => {
+        interval = setInterval(action, 80);
+      }, 400);
+    };
+    const stop = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    el.addEventListener('touchstart', start, { passive: true });
+    el.addEventListener('mousedown', start);
+    el.addEventListener('touchend', stop);
+    el.addEventListener('touchcancel', stop);
+    el.addEventListener('mouseup', stop);
+    el.addEventListener('mouseleave', stop);
+  }
+
+  async function submitBracket() {
+    if (!state.bracketDraft) return;
+    try {
+      const res = await fetchWithTimeout('/api/prediction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: state.userId, scores: state.bracketDraft.scores, beers: state.bracketDraft.beers })
+      }, 15000);
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast(data.error ? 'Error: ' + data.error : 'Submit failed');
+        return false;
+      }
+      state.prediction = data.prediction;
+      state.bracketDraft = null;
+      clearBracketDraft();
+      toast('Bracket submitted — see you at the next refresh');
+      return true;
+    } catch (e) {
+      toast('Offline — try again in a sec');
+      return false;
+    }
+  }
+
   function closePlayer() {
     const modal = $('#player-modal');
     if (!modal) return;
@@ -1191,6 +1676,30 @@
         }
       }
     }, 800);
+
+    // Leaderboard controls
+    $('#leaderboard-edit')?.addEventListener('click', async () => {
+      if (!state.bracketEditing) {
+        state.bracketEditing = true;
+        state.bracketDraft = hydrateBracketDraft();
+        renderLeaderboard();
+        return;
+      }
+      // Currently editing — save + exit
+      const ok = await submitBracket();
+      if (ok) {
+        state.bracketEditing = false;
+        renderLeaderboard();
+      }
+    });
+    $('#leaderboard-share')?.addEventListener('click', shareBracketCard);
+    $('#leaderboard-sort')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-sort]');
+      if (!btn) return;
+      state.bracketSort = btn.dataset.sort;
+      try { localStorage.setItem('rift_bracket_sort', state.bracketSort); } catch {}
+      renderLeaderboard();
+    });
 
     // When the tab becomes visible again after being backgrounded on mobile,
     // SSE may be dead. Refresh state and reconnect.

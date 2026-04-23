@@ -313,18 +313,22 @@ const PROPOSALS = [
   }
 ];
 
+// Official entrants. Reese is a proposal subject, not an entrant — don't add here.
+const PLAYERS = ['MURPH', 'MAX', 'MANGO', 'PATTY', 'HIPPIE', 'PICKLE', 'RYAN', 'PARKER', 'DAN', 'HOAG'];
+const DEFAULT_PAR = 70;
+
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {} }));
+  if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {}, predictions: {} }));
 }
 
 function loadVotes() {
   ensureDataDir();
   try {
     const data = JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8'));
-    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {}, ...data };
+    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {}, predictions: {}, ...data };
   } catch {
-    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {} };
+    return { tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {}, predictions: {} };
   }
 }
 
@@ -397,12 +401,89 @@ function publicProposals() {
   }));
 }
 
+function validatePrediction(scores, beers) {
+  if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return { ok: false, error: 'scores must be object' };
+  if (!beers || typeof beers !== 'object' || Array.isArray(beers)) return { ok: false, error: 'beers must be object' };
+  const expected = [...PLAYERS].sort();
+  const scoreKeys = Object.keys(scores).sort();
+  const beerKeys = Object.keys(beers).sort();
+  if (scoreKeys.length !== expected.length || !expected.every((p, i) => p === scoreKeys[i])) {
+    return { ok: false, error: 'scores keyset must equal PLAYERS exactly' };
+  }
+  if (beerKeys.length !== expected.length || !expected.every((p, i) => p === beerKeys[i])) {
+    return { ok: false, error: 'beers keyset must equal PLAYERS exactly' };
+  }
+  const cleanScores = {}, cleanBeers = {};
+  for (const p of PLAYERS) {
+    if (!Object.hasOwn(scores, p) || !Object.hasOwn(beers, p)) return { ok: false, error: 'missing player ' + p };
+    const s = scores[p], b = beers[p];
+    if (!Number.isInteger(s) || !Number.isInteger(b)) return { ok: false, error: 'values must be integers' };
+    if (s < 55 || s > 140) return { ok: false, error: 'gross out of range 55-140' };
+    if (b < 0 || b > 50) return { ok: false, error: 'beers out of range 0-50' };
+    if (s - b < 40) return { ok: false, error: 'net < 40 not allowed' };
+    cleanScores[p] = s;
+    cleanBeers[p] = b;
+  }
+  return { ok: true, scores: cleanScores, beers: cleanBeers };
+}
+
+function applyPrediction(userId, scores, beers) {
+  const v = validatePrediction(scores, beers);
+  if (!v.ok) return { ok: false, error: v.error };
+  voteState.predictions = voteState.predictions || {};
+  voteState.predictions[userId] = { v: 1, scores: v.scores, beers: v.beers, ts: Date.now() };
+  persistVotes();
+  return { ok: true, prediction: voteState.predictions[userId] };
+}
+
+function computeConsensus() {
+  const preds = Object.values(voteState.predictions || {});
+  const expected = [...PLAYERS].sort();
+  const valid = preds.filter(p => {
+    if (!p || !p.scores || !p.beers) return false;
+    const sk = Object.keys(p.scores).sort();
+    const bk = Object.keys(p.beers).sort();
+    if (sk.length !== expected.length) return false;
+    return expected.every((pl, i) => pl === sk[i] && pl === bk[i]);
+  });
+  if (valid.length === 0) return null;
+  const scoreSum = {}, beerSum = {};
+  for (const pl of PLAYERS) { scoreSum[pl] = 0; beerSum[pl] = 0; }
+  for (const p of valid) {
+    for (const pl of PLAYERS) {
+      scoreSum[pl] += p.scores[pl];
+      beerSum[pl] += p.beers[pl];
+    }
+  }
+  const averageScore = {}, averageBeers = {}, averageNet = {};
+  for (const pl of PLAYERS) {
+    averageScore[pl] = scoreSum[pl] / valid.length;
+    averageBeers[pl] = beerSum[pl] / valid.length;
+    averageNet[pl] = averageScore[pl] - averageBeers[pl];
+  }
+  // Sort by net asc; tiebreak fewer beers wins (sober projections edge drunker ones).
+  const rank = [...PLAYERS].sort((a, b) => {
+    const d = averageNet[a] - averageNet[b];
+    if (Math.abs(d) > 1e-9) return d;
+    return averageBeers[a] - averageBeers[b];
+  });
+  return {
+    rank,
+    averageNet,
+    averageScore,
+    averageBeers,
+    submissionCount: valid.length,
+    computedAt: Date.now()
+  };
+}
+
 function publicState() {
   return {
     boards: liveBoards(),
     tallies: voteState.tallies,
     oddsHistory: voteState.oddsHistory,
     proposals: publicProposals(),
+    consensus: computeConsensus(),
     refreshAt: nextBoundary()
   };
 }
@@ -460,6 +541,8 @@ function resetWindow() {
   voteState.tallies = {};
   voteState.users = {};
   recordHistory();
+  // voteState.predictions intentionally NOT cleared — persistent across boundaries,
+  // same as proposals. Consensus in publicState() is recomputed on every request.
   persistVotes();
   broadcast('reset', publicState());
 }
@@ -562,7 +645,8 @@ const server = http.createServer(async (req, res) => {
     for (const [pid, data] of Object.entries(voteState.proposals || {})) {
       if (data && data.votes && data.votes[userId]) proposalVotes[pid] = data.votes[userId];
     }
-    return send(res, 200, { userId, picks, proposalVotes });
+    const prediction = (voteState.predictions || {})[userId] || null;
+    return send(res, 200, { userId, picks, proposalVotes, prediction });
   }
 
   if (req.method === 'POST' && url === '/api/vote') {
@@ -586,6 +670,19 @@ const server = http.createServer(async (req, res) => {
       const tally = applyProposalVote(userId, proposalId, vote === null ? null : vote);
       if (!tally && vote !== null) return send(res, 400, { error: 'invalid vote' });
       return send(res, 200, { ok: true, tally: ((voteState.proposals || {})[proposalId] || {}).tally || { yes: 0, no: 0 } });
+    } catch (e) {
+      return send(res, 400, { error: 'bad json' });
+    }
+  }
+
+  if (req.method === 'POST' && url === '/api/prediction') {
+    try {
+      const body = await readBody(req);
+      const { userId, scores, beers } = body;
+      if (!userId) return send(res, 400, { error: 'missing userId' });
+      const result = applyPrediction(userId, scores, beers);
+      if (!result.ok) return send(res, 400, { error: result.error || 'invalid prediction' });
+      return send(res, 200, { ok: true, prediction: result.prediction });
     } catch (e) {
       return send(res, 400, { error: 'bad json' });
     }
