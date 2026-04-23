@@ -278,7 +278,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 20px 80px; }
 .line-odds { position: relative; z-index: 2; }
 
 .leaderboard {
-  margin-top: 36px; padding: 22px 20px 18px;
+  margin: 0 0 28px; padding: 22px 20px 18px;
   border-radius: var(--radius);
   background: linear-gradient(180deg, #17171c 0%, #0f0f13 100%);
   border: 1px solid var(--line);

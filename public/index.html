@@ -67,19 +67,6 @@
       <p>👍 if the line's a steal. 👎 if it's garbage. The crowd moves the board in real time. Build a parlay below to flex on the group chat.</p>
     </section>
 
-    <div class="proposal-carousel-wrap">
-      <div class="proposal-banners" id="proposal-banners"></div>
-      <div class="proposal-dots" id="proposal-dots" hidden></div>
-    </div>
-
-    <section class="boards" id="boards">
-      <div class="boards-placeholder" id="boards-initial-loader" style="grid-column:1/-1;padding:40px 24px;border:1px dashed rgba(255,255,255,0.08);border-radius:18px;background:rgba(255,255,255,0.02);text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;color:#f4efe6;">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;">Loading odds&hellip;</div>
-        <div style="color:#9a958b;font-size:13px;max-width:320px;">First load after an idle period can take a few seconds while the server wakes up. If this message stays for more than 20 seconds, tap retry below.</div>
-        <button type="button" onclick="location.reload()" style="margin-top:8px;background:linear-gradient(180deg,#e7c16b 0%,#b8893f 100%);color:#1a130a;border:0;border-radius:10px;padding:10px 16px;font-weight:700;font-size:13px;letter-spacing:1px;cursor:pointer;">Tap to retry</button>
-      </div>
-    </section>
-
     <section class="leaderboard" id="leaderboard">
       <div class="leaderboard-head">
         <div class="leaderboard-kicker">PROJECTED FINISH</div>
@@ -97,6 +84,19 @@
         <button class="leaderboard-share" id="leaderboard-share" type="button" hidden>📸 Share bracket</button>
       </div>
       <div class="leaderboard-meta" id="leaderboard-meta"></div>
+    </section>
+
+    <div class="proposal-carousel-wrap">
+      <div class="proposal-banners" id="proposal-banners"></div>
+      <div class="proposal-dots" id="proposal-dots" hidden></div>
+    </div>
+
+    <section class="boards" id="boards">
+      <div class="boards-placeholder" id="boards-initial-loader" style="grid-column:1/-1;padding:40px 24px;border:1px dashed rgba(255,255,255,0.08);border-radius:18px;background:rgba(255,255,255,0.02);text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;color:#f4efe6;">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;">Loading odds&hellip;</div>
+        <div style="color:#9a958b;font-size:13px;max-width:320px;">First load after an idle period can take a few seconds while the server wakes up. If this message stays for more than 20 seconds, tap retry below.</div>
+        <button type="button" onclick="location.reload()" style="margin-top:8px;background:linear-gradient(180deg,#e7c16b 0%,#b8893f 100%);color:#1a130a;border:0;border-radius:10px;padding:10px 16px;font-weight:700;font-size:13px;letter-spacing:1px;cursor:pointer;">Tap to retry</button>
+      </div>
     </section>
 
     <section class="parlay-section">
