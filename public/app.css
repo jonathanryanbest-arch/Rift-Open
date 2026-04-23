@@ -416,47 +416,56 @@ button.leaderboard-row:focus-visible { outline: 2px solid rgba(231,193,107,0.5);
 
 /* Edit mode */
 .leaderboard-rows.editing .leaderboard-row {
-  grid-template-columns: 26px 1fr auto auto auto;
-  padding: 14px 2px;
-  row-gap: 6px;
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  grid-template-areas:
+    "rank name net"
+    ".    inputs inputs";
+  column-gap: 10px; row-gap: 10px;
+  padding: 16px 4px;
   cursor: default;
+  align-items: center;
 }
-.leaderboard-rows.editing .leaderboard-rank { font-size: 14px; padding-left: 0; }
-.leaderboard-rows.editing .leaderboard-player { font-size: 18px; }
+.leaderboard-rows.editing .leaderboard-rank { grid-area: rank; font-size: 18px; padding-left: 0; text-align: center; }
+.leaderboard-rows.editing .leaderboard-player { grid-area: name; font-size: 22px; letter-spacing: 1.6px; }
+.leaderboard-rows.editing .leaderboard-net { grid-area: net; }
+.leaderboard-inputs {
+  grid-area: inputs;
+  display: flex; gap: 12px;
+}
 .stepper {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px; border-radius: 10px;
-  background: rgba(255,255,255,0.04); border: 1px solid var(--line);
+  flex: 1; display: flex; flex-direction: column; gap: 4px;
+  cursor: text;
 }
-.stepper button {
-  background: transparent; color: var(--text); border: 0;
-  width: 32px; height: 32px; border-radius: 8px;
-  font-size: 16px; font-weight: 700; cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  display: flex; align-items: center; justify-content: center;
-  touch-action: manipulation;
-  -webkit-user-select: none; user-select: none;
+.stepper-label {
+  font-size: 10px; letter-spacing: 1.6px; color: var(--muted);
+  font-family: 'Inter', sans-serif; font-weight: 700;
+  text-align: left; padding-left: 2px;
+  text-transform: uppercase;
 }
-.stepper button:hover { background: rgba(255,255,255,0.08); }
-.stepper button:active { background: rgba(231,193,107,0.18); color: var(--accent); }
 .stepper-value {
-  min-width: 36px; text-align: center;
-  background: transparent; color: var(--text); border: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line);
+  color: var(--text);
   font-family: 'Bebas Neue', sans-serif;
-  font-size: 18px; letter-spacing: 1px;
+  font-size: 24px; letter-spacing: 1.2px;
   font-variant-numeric: tabular-nums;
-  padding: 4px 6px; border-radius: 6px;
+  text-align: center;
+  padding: 12px 10px;
+  border-radius: 10px;
+  min-height: 52px;
+  width: 100%;
   -moz-appearance: textfield;
+  transition: border-color 0.15s, background 0.15s;
 }
 .stepper-value::-webkit-outer-spin-button,
 .stepper-value::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.stepper-value:focus { outline: 1px solid rgba(231,193,107,0.5); background: rgba(231,193,107,0.08); }
-.stepper-label {
-  font-size: 9px; letter-spacing: 1.2px; color: var(--muted);
-  font-family: 'Inter', sans-serif; font-weight: 600;
-  text-align: center; margin-bottom: 3px;
+.stepper-value:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(231,193,107,0.08);
+  box-shadow: 0 0 0 3px rgba(231,193,107,0.15);
 }
-.stepper-wrap { display: flex; flex-direction: column; align-items: center; }
 .leaderboard-net {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 20px; color: var(--accent); letter-spacing: 1px;
@@ -481,9 +490,12 @@ button.leaderboard-row:focus-visible { outline: 2px solid rgba(231,193,107,0.5);
   .leaderboard-actions { flex-direction: column; gap: 8px; }
   .leaderboard-edit, .leaderboard-share { width: 100%; min-width: 0; padding: 14px 16px; font-size: 14px; }
   .leaderboard-rows.editing .leaderboard-row {
-    grid-template-columns: 22px 1fr auto auto auto;
-    column-gap: 4px;
+    grid-template-columns: 24px 1fr auto;
+    column-gap: 8px; padding: 14px 2px;
   }
+  .leaderboard-rows.editing .leaderboard-player { font-size: 20px; letter-spacing: 1.4px; }
+  .stepper-value { font-size: 22px; min-height: 48px; padding: 10px 8px; }
+  .stepper-label { font-size: 9px; }
   .leaderboard-move { font-size: 9px; padding: 1px 3px; }
   .stepper button { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
   .stepper-value { font-size: 16px; min-width: 28px; }

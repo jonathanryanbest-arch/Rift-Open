@@ -1417,46 +1417,48 @@
     if (!state.bracketDraft) state.bracketDraft = hydrateBracketDraft();
     const draft = state.bracketDraft;
 
-    // Sort rows by net asc in edit mode
-    const ordered = [...PLAYERS].sort((a, b) => {
-      const na = netOf(a, draft.scores, draft.beers);
-      const nb = netOf(b, draft.scores, draft.beers);
-      if (na !== nb) return na - nb;
-      return draft.beers[a] - draft.beers[b];
-    });
+    // During edit, keep rows in canonical PLAYERS order — re-sorting while
+    // the user is tapping inputs would move steppers out from under their
+    // finger. Final crowd-sort happens after save, in display mode.
 
     if (subEl) subEl.textContent = 'Par ' + DEFAULT_PAR + ' · 1 beer = −1 stroke · tap save when done';
     if (metaEl) metaEl.textContent = '';
 
-    ordered.forEach((player, i) => {
-      const row = ce('div', { class: 'leaderboard-row' },
+    PLAYERS.forEach((player, i) => {
+      const scoreInput = buildNumericField('SCORE', draft.scores[player], (next) => {
+        draft.scores[player] = clampScore(next);
+        saveBracketDraft(draft);
+        // Update this row's net cell in place — no full re-render, so
+        // focus transfers cleanly to the next input the user taps.
+        updateBracketRowNet(player);
+      }, 55, 140);
+      const beersInput = buildNumericField('BEERS', draft.beers[player], (next) => {
+        draft.beers[player] = clampBeers(next);
+        saveBracketDraft(draft);
+        updateBracketRowNet(player);
+      }, 0, 50);
+      const row = ce('div', {
+        class: 'leaderboard-row', data: { player }
+      },
         ce('div', { class: 'leaderboard-rank' }, String(i + 1)),
         ce('div', { class: 'leaderboard-player' }, player),
-        buildStepper('SCORE', draft.scores[player], (next) => {
-          draft.scores[player] = clampScore(next);
-          saveBracketDraft(draft);
-          renderBracketEditor();
-        }, 55, 140),
-        buildStepper('BEERS', draft.beers[player], (next) => {
-          draft.beers[player] = clampBeers(next);
-          saveBracketDraft(draft);
-          renderBracketEditor();
-        }, 0, 50),
-        ce('div', { class: 'leaderboard-net', title: 'Net (score minus beers)' }, String(netOf(player, draft.scores, draft.beers)))
+        ce('div', { class: 'leaderboard-net', title: 'Net (score minus beers)' }, String(netOf(player, draft.scores, draft.beers))),
+        ce('div', { class: 'leaderboard-inputs' }, scoreInput, beersInput)
       );
       rowsEl.appendChild(row);
     });
   }
 
-  function buildStepper(label, value, onChange, min, max) {
-    const minusBtn = ce('button', {
-      type: 'button', 'aria-label': label + ' minus',
-      onclick: (e) => { e.preventDefault(); onChange((value || 0) - 1); }
-    }, '−');
-    const plusBtn = ce('button', {
-      type: 'button', 'aria-label': label + ' plus',
-      onclick: (e) => { e.preventDefault(); onChange((value || 0) + 1); }
-    }, '+');
+  function updateBracketRowNet(player) {
+    const draft = state.bracketDraft;
+    if (!draft) return;
+    const row = document.querySelector(`.leaderboard-row[data-player="${CSS.escape(player)}"]`);
+    if (!row) return;
+    const netEl = row.querySelector('.leaderboard-net');
+    if (netEl) netEl.textContent = String(netOf(player, draft.scores, draft.beers));
+  }
+
+  function buildNumericField(label, value, onChange, min, max) {
     const input = document.createElement('input');
     input.type = 'number';
     input.inputMode = 'numeric';
@@ -1465,41 +1467,23 @@
     input.max = String(max);
     input.value = String(value);
     input.className = 'stepper-value';
-    input.addEventListener('change', () => {
-      const parsed = parseInt(input.value, 10);
-      if (Number.isFinite(parsed)) onChange(parsed);
-    });
-    input.addEventListener('blur', () => {
+    input.setAttribute('aria-label', label);
+    const commit = () => {
       const parsed = parseInt(input.value, 10);
       if (Number.isFinite(parsed)) onChange(parsed);
       else onChange(value);
+    };
+    input.addEventListener('change', commit);
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); input.blur(); }
     });
-    // Long-press to auto-increment
-    attachLongPress(minusBtn, () => onChange((value || 0) - 1));
-    attachLongPress(plusBtn, () => onChange((value || 0) + 1));
-    return ce('div', { class: 'stepper-wrap' },
-      ce('div', { class: 'stepper-label' }, label),
-      ce('div', { class: 'stepper' }, minusBtn, input, plusBtn)
+    // Tap to focus selects the current value so typing replaces it immediately
+    input.addEventListener('focus', () => { try { input.select(); } catch {} });
+    return ce('label', { class: 'stepper' },
+      ce('span', { class: 'stepper-label' }, label),
+      input
     );
-  }
-
-  function attachLongPress(el, action) {
-    let timer = null, interval = null;
-    const start = () => {
-      timer = setTimeout(() => {
-        interval = setInterval(action, 80);
-      }, 400);
-    };
-    const stop = () => {
-      if (timer) { clearTimeout(timer); timer = null; }
-      if (interval) { clearInterval(interval); interval = null; }
-    };
-    el.addEventListener('touchstart', start, { passive: true });
-    el.addEventListener('mousedown', start);
-    el.addEventListener('touchend', stop);
-    el.addEventListener('touchcancel', stop);
-    el.addEventListener('mouseup', stop);
-    el.addEventListener('mouseleave', stop);
   }
 
   async function submitBracket() {
