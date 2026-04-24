@@ -7,6 +7,7 @@ const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_DIR = path.join(__dirname, 'data');
 const VOTES_FILE = path.join(DATA_DIR, 'votes.json');
+const COURSE_FILE = path.join(DATA_DIR, 'course.json');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -317,6 +318,18 @@ const PROPOSALS = [
 const PLAYERS = ['MURPH', 'MAX', 'MANGO', 'PATTY', 'HIPPIE', 'PICKLE', 'RYAN', 'PARKER', 'DAN', 'HOAG'];
 const DEFAULT_PAR = 70;
 
+// Head-to-head matchups. Tally is derived from voteState.predictions on every read.
+const MATCHUPS = [
+  { id: 'm-murph-max',     a: 'MURPH',  b: 'MAX',    kicker: 'TITLE FIGHT',      blurb: 'Favorite vs challenger. Lower net takes it.' },
+  { id: 'm-pickle-patty',  a: 'PICKLE', b: 'PATTY',  kicker: 'DARK HORSE DERBY', blurb: 'Who outsmarts the field?' },
+  { id: 'm-mango-parker',  a: 'MANGO',  b: 'PARKER', kicker: 'MID PACK MAYHEM',  blurb: 'Two live arms. Pick one.' },
+  { id: 'm-hippie-hoag',   a: 'HIPPIE', b: 'HOAG',   kicker: 'LAST CALL BATTLE', blurb: 'Who drinks the edge?' },
+  { id: 'm-ryan-dan',      a: 'RYAN',   b: 'DAN',    kicker: 'RIVALRY WEEK',     blurb: 'Old feud, new course.' }
+];
+
+// DNF is currently only valid for Parker (running gag from last year).
+const DNF_ALLOWED = new Set(['PARKER']);
+
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(VOTES_FILE)) fs.writeFileSync(VOTES_FILE, JSON.stringify({ tallies: {}, users: {}, oddsOverrides: {}, oddsHistory: {}, proposals: {}, predictions: {} }));
@@ -333,6 +346,15 @@ function loadVotes() {
 }
 
 let voteState = loadVotes();
+
+// Course data is a static one-time import (see scripts/fetch-course.js).
+// Loaded once at boot; no refresh logic, no runtime API calls.
+let courseData = null;
+try {
+  if (fs.existsSync(COURSE_FILE)) courseData = JSON.parse(fs.readFileSync(COURSE_FILE, 'utf8'));
+} catch (e) {
+  console.error('Failed to load course.json:', e.message);
+}
 let writePending = false;
 
 function persistVotes() {
@@ -401,39 +423,118 @@ function publicProposals() {
   }));
 }
 
-function validatePrediction(scores, beers) {
-  if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return { ok: false, error: 'scores must be object' };
-  if (!beers || typeof beers !== 'object' || Array.isArray(beers)) return { ok: false, error: 'beers must be object' };
-  const expected = [...PLAYERS].sort();
-  const scoreKeys = Object.keys(scores).sort();
-  const beerKeys = Object.keys(beers).sort();
-  if (scoreKeys.length !== expected.length || !expected.every((p, i) => p === scoreKeys[i])) {
-    return { ok: false, error: 'scores keyset must equal PLAYERS exactly' };
+// Partial-update-aware validator. `partial` may contain any subset of
+// { scores, beers, dnf }, keyed by any subset of PLAYERS. Existing stored
+// prediction (if any) is passed in so we can validate the merged result,
+// not just the partial patch.
+function validatePredictionPatch(partial, existing) {
+  if (!partial || typeof partial !== 'object' || Array.isArray(partial)) {
+    return { ok: false, error: 'body must be an object' };
   }
-  if (beerKeys.length !== expected.length || !expected.every((p, i) => p === beerKeys[i])) {
-    return { ok: false, error: 'beers keyset must equal PLAYERS exactly' };
+  const patchScores = partial.scores && typeof partial.scores === 'object' && !Array.isArray(partial.scores) ? partial.scores : {};
+  const patchBeers  = partial.beers  && typeof partial.beers  === 'object' && !Array.isArray(partial.beers)  ? partial.beers  : {};
+  const patchDnf    = partial.dnf    && typeof partial.dnf    === 'object' && !Array.isArray(partial.dnf)    ? partial.dnf    : {};
+
+  // Every patch key must be a known PLAYER (no prototype pollution, no typos).
+  const playerSet = new Set(PLAYERS);
+  for (const k of Object.keys(patchScores)) if (!playerSet.has(k)) return { ok: false, error: 'unknown player in scores: ' + k };
+  for (const k of Object.keys(patchBeers))  if (!playerSet.has(k)) return { ok: false, error: 'unknown player in beers: ' + k };
+  for (const k of Object.keys(patchDnf))    if (!playerSet.has(k)) return { ok: false, error: 'unknown player in dnf: ' + k };
+
+  // DNF is allow-listed to Parker only.
+  for (const k of Object.keys(patchDnf)) {
+    if (patchDnf[k] === true && !DNF_ALLOWED.has(k)) {
+      return { ok: false, error: 'DNF not allowed for ' + k };
+    }
+    if (typeof patchDnf[k] !== 'boolean') {
+      return { ok: false, error: 'dnf values must be boolean' };
+    }
   }
-  const cleanScores = {}, cleanBeers = {};
+
+  // Build the merged prediction. Start from existing (or fresh defaults).
+  const merged = existing
+    ? { scores: { ...existing.scores }, beers: { ...existing.beers }, dnf: { ...(existing.dnf || {}) } }
+    : null;
+
+  // Detect whether this is a full write (bracket editor path) vs partial (H2H path).
+  const scoreKeys = Object.keys(patchScores);
+  const beerKeys = Object.keys(patchBeers);
+  const hasFullScores = scoreKeys.length === PLAYERS.length && PLAYERS.every(p => Object.hasOwn(patchScores, p));
+  const hasFullBeers  = beerKeys.length === PLAYERS.length  && PLAYERS.every(p => Object.hasOwn(patchBeers, p));
+  const isFullWrite = hasFullScores && hasFullBeers;
+
+  if (!merged && !isFullWrite) {
+    return { ok: false, error: 'no existing prediction — first submission must be a full bracket' };
+  }
+
+  const final = merged || { scores: {}, beers: {}, dnf: {} };
+
   for (const p of PLAYERS) {
-    if (!Object.hasOwn(scores, p) || !Object.hasOwn(beers, p)) return { ok: false, error: 'missing player ' + p };
-    const s = scores[p], b = beers[p];
-    if (!Number.isInteger(s) || !Number.isInteger(b)) return { ok: false, error: 'values must be integers' };
-    if (s < 55 || s > 140) return { ok: false, error: 'gross out of range 55-140' };
-    if (b < 0 || b > 50) return { ok: false, error: 'beers out of range 0-50' };
-    if (s - b < 40) return { ok: false, error: 'net < 40 not allowed' };
-    cleanScores[p] = s;
-    cleanBeers[p] = b;
+    if (Object.hasOwn(patchScores, p)) final.scores[p] = patchScores[p];
+    if (Object.hasOwn(patchBeers, p))  final.beers[p]  = patchBeers[p];
+    if (Object.hasOwn(patchDnf, p))    final.dnf[p]    = patchDnf[p];
   }
-  return { ok: true, scores: cleanScores, beers: cleanBeers };
+
+  // Validate every player in the merged result satisfies bounds.
+  for (const p of PLAYERS) {
+    const s = final.scores[p], b = final.beers[p];
+    const dnf = !!final.dnf[p];
+    if (!Number.isInteger(s) || !Number.isInteger(b)) return { ok: false, error: 'values must be integers (' + p + ')' };
+    if (b < 0 || b > 50) return { ok: false, error: 'beers out of range for ' + p };
+    if (dnf) {
+      // DNF sentinel: score and beers both 0.
+      if (s !== 0 || b !== 0) return { ok: false, error: 'DNF requires score=0 beers=0 for ' + p };
+    } else {
+      if (s < 55 || s > 140) return { ok: false, error: 'gross out of range for ' + p };
+      if (s - b < 40) return { ok: false, error: 'net < 40 not allowed for ' + p };
+    }
+  }
+
+  return { ok: true, scores: final.scores, beers: final.beers, dnf: final.dnf };
 }
 
-function applyPrediction(userId, scores, beers) {
-  const v = validatePrediction(scores, beers);
-  if (!v.ok) return { ok: false, error: v.error };
+// applyPrediction — accepts either legacy (scores, beers) OR a single partial object.
+// The legacy 3-arg shape is kept for inside-the-file callers (there are none currently),
+// while the endpoint passes a single object.
+function applyPrediction(userId, partial) {
   voteState.predictions = voteState.predictions || {};
-  voteState.predictions[userId] = { v: 1, scores: v.scores, beers: v.beers, ts: Date.now() };
+  const existing = voteState.predictions[userId] || null;
+  const v = validatePredictionPatch(partial, existing);
+  if (!v.ok) return { ok: false, error: v.error };
+  voteState.predictions[userId] = { v: 2, scores: v.scores, beers: v.beers, dnf: v.dnf, ts: Date.now() };
   persistVotes();
   return { ok: true, prediction: voteState.predictions[userId] };
+}
+
+// Shared with the client (keep in sync).
+function deriveUserPick(prediction, a, b) {
+  if (!prediction || !prediction.scores || !prediction.beers) return null;
+  const dnf = prediction.dnf || {};
+  const dnfA = !!dnf[a], dnfB = !!dnf[b];
+  if (dnfA && !dnfB) return 'b';
+  if (dnfB && !dnfA) return 'a';
+  if (dnfA && dnfB) return null;
+  const netA = prediction.scores[a] - prediction.beers[a];
+  const netB = prediction.scores[b] - prediction.beers[b];
+  if (netA < netB) return 'a';
+  if (netB < netA) return 'b';
+  if (prediction.beers[a] < prediction.beers[b]) return 'a';
+  if (prediction.beers[b] < prediction.beers[a]) return 'b';
+  return a < b ? 'a' : 'b';
+}
+
+function computeMatchupTally(a, b) {
+  const tally = { a: 0, b: 0 };
+  for (const pred of Object.values(voteState.predictions || {})) {
+    const pick = deriveUserPick(pred, a, b);
+    if (pick === 'a') tally.a++;
+    else if (pick === 'b') tally.b++;
+  }
+  return tally;
+}
+
+function publicMatchups() {
+  return MATCHUPS.map(m => ({ ...m, tally: computeMatchupTally(m.a, m.b) }));
 }
 
 function computeConsensus() {
@@ -447,23 +548,39 @@ function computeConsensus() {
     return expected.every((pl, i) => pl === sk[i] && pl === bk[i]);
   });
   if (valid.length === 0) return null;
-  const scoreSum = {}, beerSum = {};
-  for (const pl of PLAYERS) { scoreSum[pl] = 0; beerSum[pl] = 0; }
+  // Average per player, excluding submissions where that player is marked DNF
+  // (so Parker's DNF doesn't pull his line to 0 for everyone).
+  const scoreSum = {}, beerSum = {}, counts = {};
+  for (const pl of PLAYERS) { scoreSum[pl] = 0; beerSum[pl] = 0; counts[pl] = 0; }
   for (const p of valid) {
+    const dnf = p.dnf || {};
     for (const pl of PLAYERS) {
+      if (dnf[pl]) continue;
       scoreSum[pl] += p.scores[pl];
       beerSum[pl] += p.beers[pl];
+      counts[pl]++;
     }
   }
   const averageScore = {}, averageBeers = {}, averageNet = {};
   for (const pl of PLAYERS) {
-    averageScore[pl] = scoreSum[pl] / valid.length;
-    averageBeers[pl] = beerSum[pl] / valid.length;
-    averageNet[pl] = averageScore[pl] - averageBeers[pl];
+    if (counts[pl] > 0) {
+      averageScore[pl] = scoreSum[pl] / counts[pl];
+      averageBeers[pl] = beerSum[pl] / counts[pl];
+      averageNet[pl] = averageScore[pl] - averageBeers[pl];
+    } else {
+      // All submissions marked this player DNF — surface a sentinel; UI can render DNF.
+      averageScore[pl] = null;
+      averageBeers[pl] = null;
+      averageNet[pl] = null;
+    }
   }
-  // Sort by net asc; tiebreak fewer beers wins (sober projections edge drunker ones).
+  // Sort by net asc; tiebreak fewer beers wins. Null-net (all DNF) sinks to bottom.
   const rank = [...PLAYERS].sort((a, b) => {
-    const d = averageNet[a] - averageNet[b];
+    const na = averageNet[a], nb = averageNet[b];
+    if (na === null && nb === null) return 0;
+    if (na === null) return 1;
+    if (nb === null) return -1;
+    const d = na - nb;
     if (Math.abs(d) > 1e-9) return d;
     return averageBeers[a] - averageBeers[b];
   });
@@ -483,7 +600,9 @@ function publicState() {
     tallies: voteState.tallies,
     oddsHistory: voteState.oddsHistory,
     proposals: publicProposals(),
+    matchups: publicMatchups(),
     consensus: computeConsensus(),
+    course: courseData,
     refreshAt: nextBoundary()
   };
 }
@@ -678,9 +797,9 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url === '/api/prediction') {
     try {
       const body = await readBody(req);
-      const { userId, scores, beers } = body;
+      const { userId, scores, beers, dnf } = body;
       if (!userId) return send(res, 400, { error: 'missing userId' });
-      const result = applyPrediction(userId, scores, beers);
+      const result = applyPrediction(userId, { scores, beers, dnf });
       if (!result.ok) return send(res, 400, { error: result.error || 'invalid prediction' });
       return send(res, 200, { ok: true, prediction: result.prediction });
     } catch (e) {

@@ -34,6 +34,9 @@
     bracketSort: (() => { try { return localStorage.getItem('rift_bracket_sort') || 'net'; } catch { return 'net'; } })(),
     prevRank: (() => { try { return JSON.parse(localStorage.getItem('rift_prev_rank') || 'null'); } catch { return null; } })(),
     whoami: (() => { try { return localStorage.getItem('rift_whoami') || ''; } catch { return ''; } })(),
+    matchups: [],
+    activeMatchupId: null,
+    course: null,
     userId: null,
     picks: {},
     parlay: [],
@@ -141,6 +144,8 @@
     state.oddsHistory = data.oddsHistory || {};
     state.proposals = data.proposals || [];
     state.consensus = data.consensus || null;
+    state.matchups = data.matchups || [];
+    state.course = data.course || null;
     if (data.refreshAt) state.refreshAt = data.refreshAt;
     saveStateCache(data);
     snapshotNow();
@@ -148,6 +153,8 @@
     render();
     renderProposal();
     renderLeaderboard();
+    renderMatchups();
+    renderCourseCard();
     // clear the diag once everything is painted
     setTimeout(function(){ const d = document.getElementById('rift-diag'); if (d) d.remove(); }, 400);
   }
@@ -189,12 +196,16 @@
       state.oddsHistory = data.oddsHistory || {};
       state.proposals = data.proposals || state.proposals || [];
       state.consensus = data.consensus || null;
+      state.matchups = data.matchups || state.matchups || [];
+      state.course = data.course || state.course || null;
       if (data.refreshAt) state.refreshAt = data.refreshAt;
       snapshotNow();
       saveStateCache(data);
       render();
       renderProposal();
       renderLeaderboard();
+      renderMatchups();
+      renderCourseCard();
       if (opts && opts.celebrate) celebrateBoundary();
     }
     es.addEventListener('snapshot', (e) => {
@@ -990,6 +1001,163 @@
     }
   }
 
+  // --- H2H matchup share card ---
+  async function renderMatchupCanvas(matchup, draft, winner) {
+    try { await document.fonts.ready; } catch {}
+    const W = 1080, H = 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'alphabetic';
+
+    // Background
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1c1c22'); bg.addColorStop(0.5, '#141418'); bg.addColorStop(1, '#08080a');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    const glow = ctx.createRadialGradient(W / 2, H * 0.18, 60, W / 2, H * 0.18, 700);
+    glow.addColorStop(0, 'rgba(231,193,107,0.14)'); glow.addColorStop(1, 'rgba(231,193,107,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+
+    // Gold bar + logo
+    const gold = ctx.createLinearGradient(0, 0, W, 0);
+    gold.addColorStop(0, '#e7c16b'); gold.addColorStop(1, '#b8893f');
+    ctx.fillStyle = gold; ctx.fillRect(0, 0, W, 14);
+    const markSize = 96, markX = W / 2 - markSize / 2, markY = 100;
+    ctx.fillStyle = gold; roundRectPath(ctx, markX, markY, markSize, markSize, 22); ctx.fill();
+    ctx.fillStyle = '#1a130a';
+    ctx.font = "900 56px 'Bebas Neue', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('RO', W / 2, markY + 66);
+
+    // Title
+    ctx.fillStyle = '#fff6dd';
+    ctx.font = "800 110px 'Bebas Neue', Arial, sans-serif";
+    ctx.fillText('THE RIFT OPEN', W / 2, 340);
+    ctx.fillStyle = '#9a958b';
+    ctx.font = "600 28px 'Inter', Arial, sans-serif";
+    ctx.fillText('YEAR V \u00b7 MY CALL', W / 2, 385);
+
+    ctx.strokeStyle = 'rgba(231,193,107,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(W / 2 - 60, 430); ctx.lineTo(W / 2 + 60, 430); ctx.stroke();
+
+    ctx.fillStyle = '#e7c16b';
+    ctx.font = "800 44px 'Bebas Neue', Arial, sans-serif";
+    ctx.fillText(matchup.kicker || 'HEAD TO HEAD', W / 2, 490);
+    if (matchup.blurb) {
+      ctx.fillStyle = '#9a958b';
+      ctx.font = "500 24px 'Inter', Arial, sans-serif";
+      ctx.fillText(matchup.blurb, W / 2, 530);
+    }
+
+    // Two side columns
+    const colAx = W * 0.28, colBx = W * 0.72;
+    const topY = 680;
+    const drawSide = (player, d, x, isWinner) => {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isWinner ? '#e7c16b' : '#6d675d';
+      ctx.font = "800 96px 'Bebas Neue', Arial, sans-serif";
+      ctx.fillText(player, x, topY);
+      if (d.dnf) {
+        // Red DNF chip
+        const chipW = 260, chipH = 92, chipX = x - chipW / 2, chipY = topY + 40;
+        ctx.fillStyle = '#7a1f1f';
+        roundRectPath(ctx, chipX, chipY, chipW, chipH, 16); ctx.fill();
+        ctx.fillStyle = '#ffd7d7';
+        ctx.font = "800 56px 'Bebas Neue', Arial, sans-serif";
+        ctx.fillText('DNF', x, chipY + 65);
+        return;
+      }
+      const net = d.score - d.beers;
+      // Score + beers stacked
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = "700 32px 'Inter', Arial, sans-serif";
+      ctx.fillText('SCORE', x, topY + 100);
+      ctx.font = "800 80px 'Bebas Neue', Arial, sans-serif";
+      ctx.fillStyle = '#fff6dd';
+      ctx.fillText(String(d.score), x, topY + 170);
+
+      ctx.fillStyle = '#f4efe6';
+      ctx.font = "700 32px 'Inter', Arial, sans-serif";
+      ctx.fillText('BEERS', x, topY + 240);
+      ctx.font = "800 80px 'Bebas Neue', Arial, sans-serif";
+      ctx.fillStyle = '#fff6dd';
+      ctx.fillText(String(d.beers), x, topY + 310);
+
+      // Net callout
+      const chipW = 300, chipH = 110, chipX = x - chipW / 2, chipY = topY + 370;
+      ctx.fillStyle = isWinner ? 'rgba(231,193,107,0.2)' : 'rgba(255,255,255,0.04)';
+      roundRectPath(ctx, chipX, chipY, chipW, chipH, 16); ctx.fill();
+      ctx.strokeStyle = isWinner ? '#e7c16b' : 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = isWinner ? 3 : 1;
+      roundRectPath(ctx, chipX, chipY, chipW, chipH, 16); ctx.stroke();
+      ctx.fillStyle = '#9a958b';
+      ctx.font = "700 20px 'Inter', Arial, sans-serif";
+      ctx.fillText('NET', x, chipY + 35);
+      ctx.fillStyle = isWinner ? '#e7c16b' : '#f4efe6';
+      ctx.font = "800 64px 'Bebas Neue', Arial, sans-serif";
+      ctx.fillText(String(net), x, chipY + 92);
+    };
+
+    drawSide(matchup.a, draft[matchup.a], colAx, winner === 'a');
+    drawSide(matchup.b, draft[matchup.b], colBx, winner === 'b');
+
+    // VS badge center
+    ctx.fillStyle = '#6d675d';
+    ctx.font = "800 80px 'Bebas Neue', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('VS', W / 2, topY + 150);
+
+    // Verdict
+    ctx.fillStyle = '#e7c16b';
+    ctx.font = "800 48px 'Bebas Neue', Arial, sans-serif";
+    ctx.textAlign = 'center';
+    const verdict = winner
+      ? `I GOT ${winner === 'a' ? matchup.a : matchup.b}`
+      : 'NO CALL';
+    ctx.fillText(verdict, W / 2, H - 280);
+    ctx.fillStyle = '#9a958b';
+    ctx.font = "600 26px 'Inter', Arial, sans-serif";
+    ctx.fillText('FADE ME \u2014 1 BEER = \u22121 STROKE', W / 2, H - 230);
+
+    // URL footer
+    ctx.fillStyle = '#6d675d';
+    ctx.font = "600 24px 'Inter', Arial, sans-serif";
+    ctx.fillText('rift-open-production.up.railway.app', W / 2, H - 70);
+
+    return new Promise((resolve) => { canvas.toBlob((blob) => resolve(blob), 'image/png', 0.95); });
+  }
+
+  async function shareMatchupCard(matchupId, draft, winner) {
+    const m = state.matchups.find(x => x.id === matchupId);
+    if (!m) return;
+    try {
+      const blob = await renderMatchupCanvas(m, draft, winner);
+      if (!blob) throw new Error('no blob');
+      const file = new File([blob], `rift-open-${m.a.toLowerCase()}-vs-${m.b.toLowerCase()}.png`, { type: 'image/png' });
+      const title = `${m.a} vs ${m.b} \u2014 My Call`;
+      const text = `My ${m.a} vs ${m.b} call. Fade me.`;
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        try {
+          await navigator.share({ files: [file], title, text });
+          return;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast('Image saved');
+    } catch (e) {
+      console.error('matchup card failed', e);
+      toast("Couldn\u2019t make the image");
+    }
+  }
+
   function hydrateFromHash() {
     const m = location.hash.match(/p=([^&]+)/);
     if (!m) return;
@@ -1265,16 +1433,20 @@
 
   function hydrateBracketDraft() {
     const draft = loadBracketDraft();
-    if (draft && draft.scores && draft.beers) return draft;
+    if (draft && draft.scores && draft.beers) {
+      if (!draft.dnf) draft.dnf = {};
+      return draft;
+    }
     if (state.prediction && state.prediction.scores && state.prediction.beers) {
       return {
         scores: { ...state.prediction.scores },
-        beers: { ...state.prediction.beers }
+        beers: { ...state.prediction.beers },
+        dnf:    { ...(state.prediction.dnf || {}) }
       };
     }
     const scores = {}, beers = {};
     for (const p of PLAYERS) { scores[p] = DEFAULT_PAR; beers[p] = 0; }
-    return { scores, beers };
+    return { scores, beers, dnf: {} };
   }
 
   function netOf(p, scores, beers) {
@@ -1371,18 +1543,25 @@
     }
 
     const sortMode = state.bracketSort || 'net';
-    const ranked = [...PLAYERS].sort((a, b) => {
-      if (sortMode === 'score') {
-        const d = c.averageScore[a] - c.averageScore[b];
-        return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
-      } else if (sortMode === 'beers') {
-        const d = c.averageBeers[b] - c.averageBeers[a]; // DESC for beers
-        return Math.abs(d) > 1e-9 ? d : (c.averageNet[a] - c.averageNet[b]);
-      } else {
-        const d = c.averageNet[a] - c.averageNet[b];
-        return Math.abs(d) > 1e-9 ? d : (c.averageBeers[a] - c.averageBeers[b]);
-      }
-    });
+    // Null-aware comparator — nulls sink to bottom.
+    const cmpNum = (x, y) => {
+      if (x === null && y === null) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return x - y;
+    };
+    const ranked = sortMode === 'net'
+      // Server already sorted this for us (null-aware, with tiebreaks).
+      ? c.rank.slice()
+      : [...PLAYERS].sort((a, b) => {
+          if (sortMode === 'score') {
+            const d = cmpNum(c.averageScore[a], c.averageScore[b]);
+            return d !== 0 ? d : cmpNum(c.averageBeers[a], c.averageBeers[b]);
+          } else {
+            const d = cmpNum(c.averageBeers[b], c.averageBeers[a]); // DESC
+            return d !== 0 ? d : cmpNum(c.averageNet[a], c.averageNet[b]);
+          }
+        });
 
     // Movement arrows only make sense for the canonical NET ranking.
     const showMovement = sortMode === 'net' && state.prevRank && Object.keys(state.prevRank).length > 0;
@@ -1449,11 +1628,10 @@
     if (metaEl) metaEl.textContent = '';
 
     PLAYERS.forEach((player, i) => {
+      const isDnf = !!(draft.dnf && draft.dnf[player]);
       const scoreInput = buildNumericField('SCORE', draft.scores[player], (next) => {
         draft.scores[player] = clampScore(next);
         saveBracketDraft(draft);
-        // Update this row's net cell in place — no full re-render, so
-        // focus transfers cleanly to the next input the user taps.
         updateBracketRowNet(player);
       }, 55, 140);
       const beersInput = buildNumericField('BEERS', draft.beers[player], (next) => {
@@ -1461,12 +1639,37 @@
         saveBracketDraft(draft);
         updateBracketRowNet(player);
       }, 0, 50);
+      if (isDnf) {
+        // Lock inputs when DNF is active.
+        scoreInput.querySelector('input').disabled = true;
+        beersInput.querySelector('input').disabled = true;
+      }
+      const playerCell = ce('div', { class: 'leaderboard-player' }, player);
+      if (player === 'PARKER') {
+        // Running-gag DNF checkbox — only Parker gets one.
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = 'parker-dnf-cb';
+        cb.checked = isDnf;
+        cb.addEventListener('change', () => {
+          if (!draft.dnf) draft.dnf = {};
+          draft.dnf.PARKER = cb.checked;
+          if (cb.checked) { draft.scores.PARKER = 0; draft.beers.PARKER = 0; }
+          else { if (draft.scores.PARKER === 0) draft.scores.PARKER = DEFAULT_PAR; }
+          saveBracketDraft(draft);
+          renderBracketEditor();
+        });
+        const label = ce('label', { class: 'dnf-toggle', for: 'parker-dnf-cb' }, cb, ' DNF');
+        playerCell.appendChild(label);
+      }
       const row = ce('div', {
-        class: 'leaderboard-row', data: { player }
+        class: 'leaderboard-row' + (isDnf ? ' is-dnf' : ''), data: { player }
       },
         ce('div', { class: 'leaderboard-rank' }, String(i + 1)),
-        ce('div', { class: 'leaderboard-player' }, player),
-        ce('div', { class: 'leaderboard-net', title: 'Net (score minus beers)' }, String(netOf(player, draft.scores, draft.beers))),
+        playerCell,
+        ce('div', { class: 'leaderboard-net', title: 'Net (score minus beers)' },
+          isDnf ? ce('span', { class: 'dnf-chip' }, 'DNF') : String(netOf(player, draft.scores, draft.beers))
+        ),
         ce('div', { class: 'leaderboard-inputs' }, scoreInput, beersInput)
       );
       rowsEl.appendChild(row);
@@ -1516,7 +1719,7 @@
       const res = await fetchWithTimeout('/api/prediction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: state.userId, scores: state.bracketDraft.scores, beers: state.bracketDraft.beers })
+        body: JSON.stringify({ userId: state.userId, scores: state.bracketDraft.scores, beers: state.bracketDraft.beers, dnf: state.bracketDraft.dnf || {} })
       }, 15000);
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -1532,6 +1735,336 @@
       toast('Offline — try again in a sec');
       return false;
     }
+  }
+
+  // --- Head-to-head matchups (derived from the shared prediction store) ---
+
+  function deriveUserPick(prediction, a, b) {
+    if (!prediction || !prediction.scores || !prediction.beers) return null;
+    const dnf = prediction.dnf || {};
+    const dnfA = !!dnf[a], dnfB = !!dnf[b];
+    if (dnfA && !dnfB) return 'b';
+    if (dnfB && !dnfA) return 'a';
+    if (dnfA && dnfB) return null;
+    const netA = prediction.scores[a] - prediction.beers[a];
+    const netB = prediction.scores[b] - prediction.beers[b];
+    if (netA < netB) return 'a';
+    if (netB < netA) return 'b';
+    if (prediction.beers[a] < prediction.beers[b]) return 'a';
+    if (prediction.beers[b] < prediction.beers[a]) return 'b';
+    return a < b ? 'a' : 'b';
+  }
+
+  function myMatchupPick(a, b) {
+    return deriveUserPick(state.prediction, a, b);
+  }
+
+  function formatPlayerDisplay(player, prediction, field /* 'score'|'beers'|'net' */) {
+    if (!prediction) return '—';
+    const dnf = (prediction.dnf || {})[player];
+    if (dnf) return 'DNF';
+    const s = prediction.scores && prediction.scores[player];
+    const b = prediction.beers && prediction.beers[player];
+    if (field === 'score') return Number.isFinite(s) ? String(s) : '—';
+    if (field === 'beers') return Number.isFinite(b) ? String(b) : '—';
+    if (field === 'net') return (Number.isFinite(s) && Number.isFinite(b)) ? String(s - b) : '—';
+    return '—';
+  }
+
+  function renderMatchups() {
+    const listEl = $('#matchups-list');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (!state.matchups || state.matchups.length === 0) return;
+    for (const m of state.matchups) {
+      const isActive = state.activeMatchupId === m.id;
+      const card = ce('div', {
+        class: 'matchup-card' + (isActive ? ' expanded' : ''),
+        data: { matchupId: m.id }
+      });
+      card.appendChild(buildMatchupTeaser(m));
+      if (isActive) card.appendChild(buildMatchupPane(m));
+      listEl.appendChild(card);
+    }
+  }
+
+  function buildMatchupTeaser(m) {
+    const total = (m.tally.a || 0) + (m.tally.b || 0);
+    const pctA = total > 0 ? Math.round((m.tally.a / total) * 100) : 50;
+    const pctB = total > 0 ? 100 - pctA : 50;
+    const myPick = myMatchupPick(m.a, m.b);
+    const myLabel = myPick === 'a' ? m.a : myPick === 'b' ? m.b : null;
+
+    const teaser = ce('button', {
+      class: 'matchup-teaser', type: 'button',
+      onclick: () => toggleMatchupExpand(m.id)
+    },
+      ce('div', { class: 'matchup-card-kicker' }, m.kicker || 'HEAD TO HEAD'),
+      ce('div', { class: 'matchup-sides' },
+        ce('div', { class: 'matchup-side a' + (myPick === 'a' ? ' mine' : '') },
+          ce('div', { class: 'matchup-player' }, m.a),
+          ce('div', { class: 'matchup-pct' }, pctA + '%')
+        ),
+        ce('div', { class: 'matchup-vs' }, 'VS'),
+        ce('div', { class: 'matchup-side b' + (myPick === 'b' ? ' mine' : '') },
+          ce('div', { class: 'matchup-player' }, m.b),
+          ce('div', { class: 'matchup-pct' }, pctB + '%')
+        )
+      ),
+      ce('div', { class: 'matchup-bar' },
+        ce('div', { class: 'matchup-bar-fill', style: 'width:' + pctA + '%' })
+      ),
+      ce('div', { class: 'matchup-meta' },
+        total === 0 ? 'No picks yet — tap to cast yours'
+          : (total + (total === 1 ? ' pick' : ' picks'))
+            + (myLabel ? ' · your call: ' + myLabel : ' · tap to cast yours')
+      )
+    );
+    return teaser;
+  }
+
+  function buildMatchupPane(m) {
+    // Default each side from the user's existing bracket prediction, or 70/0.
+    const p = state.prediction;
+    const getDefaultScore = (pl) => (p && p.scores && Number.isFinite(p.scores[pl])) ? p.scores[pl] : 70;
+    const getDefaultBeers = (pl) => (p && p.beers && Number.isFinite(p.beers[pl])) ? p.beers[pl] : 0;
+    const getDefaultDnf   = (pl) => !!(p && p.dnf && p.dnf[pl]);
+
+    const draft = {
+      [m.a]: { score: getDefaultScore(m.a), beers: getDefaultBeers(m.a), dnf: getDefaultDnf(m.a) },
+      [m.b]: { score: getDefaultScore(m.b), beers: getDefaultBeers(m.b), dnf: getDefaultDnf(m.b) }
+    };
+
+    const pane = ce('div', { class: 'matchup-pane' });
+
+    const renderPane = () => {
+      pane.innerHTML = '';
+      pane.appendChild(buildPaneBody(m, draft, renderPane));
+    };
+    renderPane();
+    return pane;
+  }
+
+  function buildPaneBody(m, draft, rerender) {
+    const blurb = m.blurb ? ce('div', { class: 'matchup-pane-blurb' }, m.blurb) : null;
+
+    const netA = draft[m.a].dnf ? Infinity : draft[m.a].score - draft[m.a].beers;
+    const netB = draft[m.b].dnf ? Infinity : draft[m.b].score - draft[m.b].beers;
+    let winner = null;
+    if (netA === Infinity && netB === Infinity) winner = null;
+    else if (netA < netB) winner = 'a';
+    else if (netB < netA) winner = 'b';
+    else if (draft[m.a].beers < draft[m.b].beers) winner = 'a';
+    else if (draft[m.b].beers < draft[m.a].beers) winner = 'b';
+    else winner = m.a < m.b ? 'a' : 'b';
+
+    const sideBlock = (side, key) => {
+      const d = draft[key];
+      const mine = winner === side && !(draft[m.a].dnf && draft[m.b].dnf);
+      const dnfToggleAllowed = (key === 'PARKER');
+      const children = [
+        ce('div', { class: 'pane-player' + (mine ? ' mine' : ''), }, key),
+      ];
+      if (dnfToggleAllowed) {
+        const dnfLabel = ce('label', { class: 'pane-dnf' });
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!d.dnf;
+        cb.addEventListener('change', () => {
+          d.dnf = cb.checked;
+          if (d.dnf) { d.score = 0; d.beers = 0; }
+          else { if (d.score === 0) d.score = 70; }
+          rerender();
+        });
+        dnfLabel.appendChild(cb);
+        dnfLabel.appendChild(document.createTextNode(' DNF'));
+        children.push(dnfLabel);
+      }
+      if (!d.dnf) {
+        children.push(ce('div', { class: 'pane-fields' },
+          buildPaneNumericField('SCORE', d.score, (next) => {
+            d.score = Math.max(55, Math.min(140, Math.round(next)));
+            rerender();
+          }, 55, 140),
+          buildPaneNumericField('BEERS', d.beers, (next) => {
+            d.beers = Math.max(0, Math.min(50, Math.round(next)));
+            rerender();
+          }, 0, 50)
+        ));
+        const net = d.score - d.beers;
+        children.push(ce('div', { class: 'pane-net' + (mine ? ' mine' : '') }, 'NET ' + net));
+      } else {
+        children.push(ce('div', { class: 'pane-dnf-flag' }, 'DNF — scratched last year'));
+      }
+      return ce('div', { class: 'pane-side ' + side }, ...children);
+    };
+
+    const verdictText = (() => {
+      if (draft[m.a].dnf && draft[m.b].dnf) return 'Both DNF — no call';
+      if (draft[m.a].dnf) return `${m.b} wins — ${m.a} DNF`;
+      if (draft[m.b].dnf) return `${m.a} wins — ${m.b} DNF`;
+      const diff = Math.abs(netA - netB);
+      const winnerName = winner === 'a' ? m.a : m.b;
+      if (diff === 0) return `Tied — tiebreaker: ${winnerName}`;
+      return `You pick ${winnerName} — lower net by ${diff}`;
+    })();
+
+    const actions = ce('div', { class: 'pane-actions' },
+      ce('button', {
+        class: 'pane-save', type: 'button',
+        onclick: () => saveMatchupEdits(m.id, draft)
+      }, 'Save my call'),
+      ce('button', {
+        class: 'pane-share', type: 'button',
+        onclick: () => shareMatchupCard(m.id, draft, winner)
+      }, '📸 Share')
+    );
+
+    const body = ce('div', { class: 'pane-body' });
+    if (blurb) body.appendChild(blurb);
+    body.appendChild(ce('div', { class: 'pane-columns' },
+      sideBlock('a', m.a),
+      sideBlock('b', m.b)
+    ));
+    body.appendChild(ce('div', { class: 'pane-verdict' }, verdictText));
+    body.appendChild(actions);
+    return body;
+  }
+
+  function buildPaneNumericField(label, value, onChange, min, max) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.inputMode = 'numeric';
+    input.pattern = '[0-9]*';
+    input.min = String(min);
+    input.max = String(max);
+    input.value = String(value);
+    input.className = 'stepper-value';
+    input.setAttribute('aria-label', label);
+    const commit = () => {
+      const parsed = parseInt(input.value, 10);
+      if (Number.isFinite(parsed)) onChange(parsed);
+      else onChange(value);
+    };
+    input.addEventListener('change', commit);
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); input.blur(); }
+    });
+    input.addEventListener('focus', () => { try { input.select(); } catch {} });
+    return ce('label', { class: 'stepper' },
+      ce('span', { class: 'stepper-label' }, label),
+      input
+    );
+  }
+
+  function toggleMatchupExpand(id) {
+    state.activeMatchupId = state.activeMatchupId === id ? null : id;
+    renderMatchups();
+  }
+
+  async function saveMatchupEdits(matchupId, draft) {
+    const m = state.matchups.find(x => x.id === matchupId);
+    if (!m) return;
+    const partial = {
+      userId: state.userId,
+      scores: {
+        [m.a]: draft[m.a].dnf ? 0 : draft[m.a].score,
+        [m.b]: draft[m.b].dnf ? 0 : draft[m.b].score
+      },
+      beers: {
+        [m.a]: draft[m.a].dnf ? 0 : draft[m.a].beers,
+        [m.b]: draft[m.b].dnf ? 0 : draft[m.b].beers
+      },
+      dnf: {
+        [m.a]: !!draft[m.a].dnf,
+        [m.b]: !!draft[m.b].dnf
+      }
+    };
+    try {
+      const res = await fetchWithTimeout('/api/prediction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(partial)
+      }, 15000);
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        toast(data.error ? 'Error: ' + data.error : 'Save failed');
+        return;
+      }
+      state.prediction = data.prediction;
+      toast('Saved — ' + m.a + ' vs ' + m.b);
+      state.activeMatchupId = null;
+      // Refresh leaderboard consensus view with new numbers (tally updates at next boundary).
+      renderLeaderboard();
+      renderMatchups();
+    } catch (e) {
+      toast('Offline — try again');
+    }
+  }
+
+  // --- Course reference card (static, from data/course.json) ---
+  function renderCourseCard() {
+    const root = document.getElementById('course-card');
+    const summary = document.getElementById('course-summary');
+    const body = document.getElementById('course-body');
+    if (!root || !body || !summary) return;
+    const c = state.course;
+    if (!c || !Array.isArray(c.holes) || c.holes.length === 0) {
+      root.hidden = true;
+      return;
+    }
+    root.hidden = false;
+    const teeName = (c.tee && c.tee.name) || '';
+    const totalYd = (c.tee && c.tee.totalYards) || c.holes.reduce((s, h) => s + (h.yardage || 0), 0);
+    const par = c.totalPar || c.holes.reduce((s, h) => s + (h.par || 0), 0);
+    summary.textContent = `${(c.courseName || c.clubName || 'Course').toUpperCase()} · ${teeName.toUpperCase()} · ${totalYd.toLocaleString()} YD · PAR ${par}`;
+
+    body.innerHTML = '';
+    const teeChip = ce('div', { class: 'course-tee-chip' },
+      teeName ? teeName.toUpperCase() + ' TEES' : 'TEES',
+      c.tee && c.tee.rating && c.tee.slope ? ce('span', {}, ` · ${c.tee.rating}/${c.tee.slope}`) : ''
+    );
+    body.appendChild(teeChip);
+
+    const buildNineGrid = (holes, label) => {
+      const grid = ce('div', { class: 'course-nine' },
+        ce('div', { class: 'course-nine-label' }, label)
+      );
+      const head = ce('div', { class: 'course-row course-row-head' },
+        ce('div', { class: 'course-cell hole' }, 'Hole'),
+        ce('div', { class: 'course-cell par' }, 'Par'),
+        ce('div', { class: 'course-cell yd' }, 'Yd'),
+        ce('div', { class: 'course-cell hdcp' }, 'Hdcp')
+      );
+      grid.appendChild(head);
+      for (const h of holes) {
+        grid.appendChild(ce('div', { class: 'course-row' },
+          ce('div', { class: 'course-cell hole' }, String(h.num)),
+          ce('div', { class: 'course-cell par' }, String(h.par)),
+          ce('div', { class: 'course-cell yd' }, String(h.yardage)),
+          ce('div', { class: 'course-cell hdcp' }, String(h.handicap))
+        ));
+      }
+      const totalPar = holes.reduce((s, h) => s + (h.par || 0), 0);
+      const totalYd = holes.reduce((s, h) => s + (h.yardage || 0), 0);
+      grid.appendChild(ce('div', { class: 'course-row course-row-total' },
+        ce('div', { class: 'course-cell hole' }, label),
+        ce('div', { class: 'course-cell par' }, String(totalPar)),
+        ce('div', { class: 'course-cell yd' }, String(totalYd)),
+        ce('div', { class: 'course-cell hdcp' }, '')
+      ));
+      return grid;
+    };
+
+    const front = c.holes.slice(0, 9);
+    const back = c.holes.slice(9, 18);
+    body.appendChild(buildNineGrid(front, 'OUT'));
+    if (back.length) body.appendChild(buildNineGrid(back, 'IN'));
+
+    body.appendChild(ce('div', { class: 'course-total' },
+      `TOTAL · PAR ${par} · ${totalYd.toLocaleString()} YD`
+    ));
   }
 
   function closePlayer() {
@@ -1767,6 +2300,70 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') bootData();
     });
+
+    initRiftTabs();
+  }
+
+  function initRiftTabs() {
+    const tabs = document.getElementById('rift-tabs');
+    if (!tabs) return;
+
+    // Measure topbar height for sticky offset (updated on resize).
+    const measureTopbar = () => {
+      const bar = document.querySelector('.topbar');
+      if (bar) document.documentElement.style.setProperty('--topbar-h', bar.offsetHeight + 'px');
+    };
+    measureTopbar();
+    window.addEventListener('resize', measureTopbar);
+
+    // Click → smooth-scroll to section with offset accounting for sticky topbar + tabs.
+    tabs.addEventListener('click', (e) => {
+      const a = e.target.closest('a[data-target]');
+      if (!a) return;
+      e.preventDefault();
+      const target = document.getElementById(a.dataset.target);
+      if (!target) return;
+      const topbarH = (document.querySelector('.topbar') || { offsetHeight: 0 }).offsetHeight;
+      const tabsH = tabs.offsetHeight;
+      const y = target.getBoundingClientRect().top + window.scrollY - topbarH - tabsH - 8;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    });
+
+    // Active tab tracking via intersection observer.
+    const sectionIds = ['leaderboard', 'boards', 'matchups', 'proposals-section', 'parlay-section'];
+    const sections = sectionIds.map(id => document.getElementById(id)).filter(Boolean);
+    const setActive = (id) => {
+      for (const a of tabs.querySelectorAll('a[data-target]')) {
+        a.classList.toggle('active', a.dataset.target === id);
+      }
+    };
+    if ('IntersectionObserver' in window && sections.length) {
+      const visible = new Map();
+      const io = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) visible.set(entry.target.id, entry.intersectionRatio);
+          else visible.delete(entry.target.id);
+        }
+        // Pick the topmost visible section (first in DOM order).
+        for (const id of sectionIds) {
+          if (visible.has(id)) { setActive(id); break; }
+        }
+      }, { rootMargin: '-120px 0px -60% 0px', threshold: [0, 0.1, 0.5] });
+      for (const s of sections) io.observe(s);
+    }
+
+    // Auto-hide on scroll-down, reveal on scroll-up.
+    let lastY = window.scrollY, ticking = false;
+    window.addEventListener('scroll', () => {
+      if (ticking) return;
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        if (y > lastY + 4 && y > 140) tabs.classList.add('rift-tabs--hidden');
+        else if (y < lastY - 4)       tabs.classList.remove('rift-tabs--hidden');
+        lastY = y; ticking = false;
+      });
+      ticking = true;
+    }, { passive: true });
   }
 
   init();

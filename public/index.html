@@ -73,6 +73,14 @@
     </div>
   </header>
 
+  <nav class="rift-tabs" id="rift-tabs" aria-label="Sections">
+    <a href="#leaderboard"       data-target="leaderboard">BRACKET</a>
+    <a href="#boards"            data-target="boards">ODDS</a>
+    <a href="#matchups"          data-target="matchups">H2H</a>
+    <a href="#proposals-section" data-target="proposals-section">BALLOTS</a>
+    <a href="#parlay-section"    data-target="parlay-section">PARLAY</a>
+  </nav>
+
   <main>
     <section class="intro">
       <h1>Bet the Board. Fade Your Friends.</h1>
@@ -114,12 +122,16 @@
         <button class="leaderboard-share" id="leaderboard-share" type="button" hidden>📸 Share bracket</button>
       </div>
       <div class="leaderboard-meta" id="leaderboard-meta"></div>
+      <details class="course-card" id="course-card" hidden>
+        <summary class="course-summary" id="course-summary">Course details</summary>
+        <div class="course-body" id="course-body"></div>
+      </details>
     </section>
 
-    <div class="proposal-carousel-wrap">
+    <section class="proposal-carousel-wrap" id="proposals-section">
       <div class="proposal-banners" id="proposal-banners"></div>
       <div class="proposal-dots" id="proposal-dots" hidden></div>
-    </div>
+    </section>
 
     <section class="boards" id="boards">
       <div class="boards-placeholder" id="boards-initial-loader" style="grid-column:1/-1;padding:40px 24px;border:1px dashed rgba(255,255,255,0.08);border-radius:18px;background:rgba(255,255,255,0.02);text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;color:#f4efe6;">
@@ -129,7 +141,16 @@
       </div>
     </section>
 
-    <section class="parlay-section">
+    <section class="matchups" id="matchups">
+      <div class="matchups-head">
+        <div class="matchups-kicker">HEAD TO HEAD</div>
+        <div class="matchups-title">Who Finishes Lower?</div>
+        <div class="matchups-sub">Tap any matchup · enter your scores · lower net wins</div>
+      </div>
+      <div class="matchups-list" id="matchups-list"></div>
+    </section>
+
+    <section class="parlay-section" id="parlay-section">
       <div class="parlay-card" id="parlay-card">
         <div class="parlay-head">
           <div>
